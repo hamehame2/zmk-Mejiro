@@ -628,14 +628,71 @@ int number_of_candidates(NGList *keys) {
   return result;
 }
 
-// キー入力を文字に変換して出力する
+
+
+// =====================================
+// QWERTY 左右判別ヘルパ
+// =====================================
+
+// QWERTY 左手: Q W E R T / A S D F G / Z X C V B
+// 右手:        Y U I O P / H J K L ; ' / N M , . / としておく
+static inline bool ng_is_left_key(uint32_t keycode) {
+    switch (keycode) {
+        // 左手
+        case Q: case W: case E: case R: case T:
+        case A: case S: case D: case F: case G:
+        case Z: case X: case C: case V: case B:
+            return true;
+
+        // 右手（＆その他）は false
+        case Y: case U: case I: case O: case P:
+        case H: case J: case K: case L: case SEMI: case SQT:
+        case N: case M: case COMMA: case DOT: case SLASH:
+        case SPACE: case ENTER:
+        default:
+            return false;
+    }
+}
+
+
+// =====================================
+// NGList を「左→右」の順に並べ替える
+// （各グループ内では元の順番を保つ = stable）
+// =====================================
+static void ng_stable_left_first(const NGList *in, NGList *out) {
+    initializeList(out);
+
+    // まず左手キーを順番通りに追加
+    for (int i = 0; i < in->size; i++) {
+        uint32_t kc = in->elements[i];
+        if (ng_is_left_key(kc)) {
+            addToList(out, kc);
+        }
+    }
+
+    // 次に右手キーを順番通りに追加
+    for (int i = 0; i < in->size; i++) {
+        uint32_t kc = in->elements[i];
+        if (!ng_is_left_key(kc)) {
+            addToList(out, kc);
+        }
+    }
+}
+
+
+// 並べ替え→以降は並べ替え済みの k を使う」 形に変更
 void ng_type(NGList *keys) {
     LOG_DBG(">NAGINATA NG_TYPE");
 
     if (keys->size == 0)
         return;
 
-    if (keys->size == 1 && keys->elements[0] == ENTER) {
+    // ★ ここで「左→右」に安定並べ替え
+    NGList ordered;
+    ng_stable_left_first(keys, &ordered);
+    NGList *k = &ordered; // 以降 k を使う
+
+    if (k->size == 1 && k->elements[0] == ENTER) {
         LOG_DBG(" NAGINATA type keycode 0x%02X", ENTER);
         raise_zmk_keycode_state_changed_from_encoded(ENTER, true, timestamp);
         raise_zmk_keycode_state_changed_from_encoded(ENTER, false, timestamp);
@@ -643,20 +700,20 @@ void ng_type(NGList *keys) {
     }
 
     uint32_t keyset = 0UL;
-    for (int i = 0; i < keys->size; i++) {
-        keyset |= ng_key[keys->elements[i] - A];
+    for (int i = 0; i < k->size; i++) {
+        keyset |= ng_key[k->elements[i] - A];
     }
 
     for (int i = 0; i < sizeof ngdickana / sizeof ngdickana[0]; i++) {
         if ((ngdickana[i].shift | ngdickana[i].douji) == keyset) {
             if (ngdickana[i].kana[0] != NONE) {
-                for (int k = 0; k < 6; k++) {
-                    if (ngdickana[i].kana[k] == NONE)
+                for (int kk = 0; kk < 6; kk++) {
+                    if (ngdickana[i].kana[kk] == NONE)
                         break;
-                    LOG_DBG(" NAGINATA type keycode 0x%02X", ngdickana[i].kana[k]);
-                    raise_zmk_keycode_state_changed_from_encoded(ngdickana[i].kana[k], true,
+                    LOG_DBG(" NAGINATA type keycode 0x%02X", ngdickana[i].kana[kk]);
+                    raise_zmk_keycode_state_changed_from_encoded(ngdickana[i].kana[kk], true,
                                                                  timestamp);
-                    raise_zmk_keycode_state_changed_from_encoded(ngdickana[i].kana[k], false,
+                    raise_zmk_keycode_state_changed_from_encoded(ngdickana[i].kana[kk], false,
                                                                  timestamp);
                 }
             } else {
@@ -672,15 +729,16 @@ void ng_type(NGList *keys) {
     NGList a, b;
     initializeList(&a);
     initializeList(&b);
-    for (int i = 0; i < keys->size - 1; i++) {
-        addToList(&a, keys->elements[i]);
+    for (int i = 0; i < k->size - 1; i++) {
+        addToList(&a, k->elements[i]);
     }
-    addToList(&b, keys->elements[keys->size - 1]);
+    addToList(&b, k->elements[k->size - 1]);
     ng_type(&a);
     ng_type(&b);
 
     LOG_DBG("<NAGINATA NG_TYPE");
 }
+
 
 // 薙刀式の入力処理
 bool naginata_press(struct zmk_behavior_binding *binding, struct zmk_behavior_binding_event event) {
