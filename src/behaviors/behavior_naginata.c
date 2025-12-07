@@ -26,12 +26,12 @@ struct naginata_config {
     int os;
 };
 
-struct naginata_config naginata_config;
+//struct naginata_config naginata_config;
 
-static uint32_t pressed_keys;
-//static int n_pressed_keys;
+static uint32_t pressed_keys = 0UL; // 押しているキーのビットをたてる
+static int8_t n_pressed_keys = 0;   // 押しているキーの数
 static int64_t timestamp;
-
+static NGListArray nginput;
 extern bool ng_excluded;
 extern bool ng_enabled;
 extern uint32_t (*ng_mode_keymap)[2];
@@ -106,9 +106,7 @@ extern uint32_t (*ng_mode_keymap)[2];
 #define B_SPACE (1UL << 30)
 #define B_SQT (1UL << 31)
 
-static NGListArray nginput;
-static uint32_t pressed_keys = 0UL; // 押しているキーのビットをたてる
-static int8_t n_pressed_keys = 0;   // 押しているキーの数
+
 
 #define NG_WINDOWS 0
 #define NG_MACOS 1
