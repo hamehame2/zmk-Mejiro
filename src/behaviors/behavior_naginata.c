@@ -108,9 +108,9 @@ static const uint32_t ng_key[] = {
 #define B_LT  B_V        // left t
 #define B_LK  B_B        // left k
 
-#define B_RN  B_COMMA    // right n
-#define B_RT  B_DOT      // right t
-#define B_RK  B_SLASH    // right k
+#define B_RN  B_N    // right n
+#define B_RT  B_M      // right t
+#define B_RK  B_COMMA    // right k
 
 #define MEJIRO_MASK  (B_LN | B_LT | B_LK | B_RN | B_RT | B_RK)
 
