@@ -61,106 +61,87 @@ extern uint32_t (*ng_mode_keymap)[2];
 
 /* shift = 00, douji = 01がシフトが効くキー */
 
-#define NONE 0x00
+#define NONE 0
 
-/* shift keys: トグルする順番 */
-const uint32_t ng_shift_list[] = {
-    /* 各段にshiftを導入する場合は、ここにキーを追加する */
-    0,
-};
+// 薙刀式
 
-/* 変換対象 */
-#define A KC_A
-#define B KC_B
-#define C KC_C
-#define D KC_D
-#define E KC_E
-#define F KC_F
-#define G KC_G
-#define H KC_H
-#define I KC_I
-#define J KC_J
-#define K KC_K
-#define L KC_L
-#define M KC_M
-#define N KC_N
-#define O KC_O
-#define P KC_P
-#define Q KC_Q
-#define R KC_R
-#define S KC_S
-#define T KC_T
-#define U KC_U
-#define V KC_V
-#define W KC_W
-#define X KC_X
-#define Y KC_Y
-#define Z KC_Z
+// 31キーを32bitの各ビットに割り当てる
+#define B_Q (1UL << 0)
+#define B_W (1UL << 1)
+#define B_E (1UL << 2)
+#define B_R (1UL << 3)
+#define B_T (1UL << 4)
 
-#define SPACE KC_SPACE
-#define ENTER KC_ENTER
-#define DOT KC_DOT
-#define COMMA KC_COMMA
-#define SLASH KC_SLASH
-#define SEMI KC_SEMICOLON
-#define SQT KC_APOSTROPHE
+#define B_Y (1UL << 5)
+#define B_U (1UL << 6)
+#define B_I (1UL << 7)
+#define B_O (1UL << 8)
+#define B_P (1UL << 9)
 
-/* keymap 平仮名変換用のキー定義 */
+#define B_A (1UL << 10)
+#define B_S (1UL << 11)
+#define B_D (1UL << 12)
+#define B_F (1UL << 13)
+#define B_G (1UL << 14)
 
-#define B_A (1UL << 0)
-#define B_B (1UL << 1)
-#define B_C (1UL << 2)
-#define B_D (1UL << 3)
-#define B_E (1UL << 4)
-#define B_F (1UL << 5)
-#define B_G (1UL << 6)
-#define B_H (1UL << 7)
-#define B_I (1UL << 8)
-#define B_J (1UL << 9)
-#define B_K (1UL << 10)
-#define B_L (1UL << 11)
-#define B_M (1UL << 12)
-#define B_N (1UL << 13)
-#define B_O (1UL << 14)
-#define B_P (1UL << 15)
-#define B_Q (1UL << 16)
-#define B_R (1UL << 17)
-#define B_S (1UL << 18)
-#define B_T (1UL << 19)
-#define B_U (1UL << 20)
-#define B_V (1UL << 21)
-#define B_W (1UL << 22)
-#define B_X (1UL << 23)
-#define B_Y (1UL << 24)
-#define B_Z (1UL << 25)
-#define B_SPACE (1UL << 26)
-#define B_ENTER (1UL << 27)
+#define B_H (1UL << 15)
+#define B_J (1UL << 16)
+#define B_K (1UL << 17)
+#define B_L (1UL << 18)
+#define B_SEMI (1UL << 19)
+
+
+#define B_Z (1UL << 20)
+#define B_X (1UL << 21)
+#define B_C (1UL << 22)
+#define B_V (1UL << 23)
+#define B_B (1UL << 24)
+
+#define B_N (1UL << 25)
+#define B_M (1UL << 26)
+#define B_COMMA (1UL << 27)
 #define B_DOT (1UL << 28)
-#define B_COMMA (1UL << 29)
-#define B_SLASH (1UL << 30)
-#define B_SEMI (1UL << 31)
+#define B_SLASH (1UL << 29)
 
-/* 変換対象のキーマップ（shiftキーとして使うキーには01を足すこと） */
+#define B_SPACE (1UL << 30)
+#define B_SQT (1UL << 31)
 
-const uint32_t ng_key[30] = {
-    B_A,     B_B,     B_C,     B_D,     B_E,     B_F,     B_G, B_H,
-    B_I,     B_J,     B_K,     B_L,     B_M,     B_N,     B_O, B_P,
-    B_Q,     B_R,     B_S,     B_T,     B_U,     B_V,     B_W, B_X,
-    B_Y,     B_Z,     B_SPACE, B_ENTER, B_DOT,   B_COMMA,
+static NGListArray nginput;
+static uint32_t pressed_keys = 0UL; // 押しているキーのビットをたてる
+static int8_t n_pressed_keys = 0;   // 押しているキーの数
+
+#define NG_WINDOWS 0
+#define NG_MACOS 1
+#define NG_LINUX 2
+#define NG_IOS 3
+
+// EEPROMに保存する設定
+typedef union {
+    uint8_t os : 2;  // 2 bits can store values 0-3 (NG_WINDOWS, NG_MACOS, NG_LINUX, NG_IOS)
+    bool tategaki : true; // true: 縦書き, false: 横書き
+} user_config_t;
+
+extern user_config_t naginata_config;
+
+static const uint32_t ng_key[] = {
+    [A - A] = B_A,     [B - A] = B_B,         [C - A] = B_C,         [D - A] = B_D,
+    [E - A] = B_E,     [F - A] = B_F,         [G - A] = B_G,         [H - A] = B_H,
+    [I - A] = B_I,     [J - A] = B_J,         [K - A] = B_K,         [L - A] = B_L,
+    [M - A] = B_M,     [N - A] = B_N,         [O - A] = B_O,         [P - A] = B_P,
+    [Q - A] = B_Q,     [R - A] = B_R,         [S - A] = B_S,         [T - A] = B_T,
+    [U - A] = B_U,     [V - A] = B_V,         [W - A] = B_W,         [X - A] = B_X,
+    [Y - A] = B_Y,     [Z - A] = B_Z,         [SEMI - A] = B_SEMI,   [COMMA - A] = B_COMMA, //[SQT - A] = B_SQT,
+    //[COMMA - A] = B_COMMA, [DOT - A] = B_DOT, [SLASH - A] = B_SLASH, [SPACE - A] = B_SPACE,
+    //[ENTER - A] = B_SPACE,
+    [DOT - A] = B_DOT, [SLASH - A] = B_SLASH, [SPACE - A] = B_SPACE, [ENTER - A] = B_SPACE,
+    [SQT - A] = B_SQT,
 };
 
-enum {
-    NG_WINDOWS,
-    NG_MACOS,
-    NG_LINUX,
-};
-
-/* 平仮名変換テーブル */
-
+// カナ変換テーブル
 typedef struct {
     uint32_t shift;
     uint32_t douji;
-    uint8_t kana[6];
+    uint32_t kana[6];
     void (*func)(void);
 } naginata_kanamap;
 
