@@ -97,6 +97,145 @@ static const uint32_t ng_key[] = {
     [SQT - A] = B_SQT,
 };
 
+
+// ====================================================================
+// Mejiro particle (助詞) support
+// ====================================================================
+
+// Mejiro 粒キーのビット割り当て
+// 仮に C/V/B と ,/. / を使用。物理キーとの紐付けは keymap 側で行う。
+#define B_LN  B_C        // left n
+#define B_LT  B_V        // left t
+#define B_LK  B_B        // left k
+
+#define B_RN  B_COMMA    // right n
+#define B_RT  B_DOT      // right t
+#define B_RK  B_SLASH    // right k
+
+#define MEJIRO_MASK  (B_LN | B_LT | B_LK | B_RN | B_RT | B_RK)
+
+// 左手 index 0〜7
+static inline uint8_t mejiro_left_index(uint32_t keyset) {
+    uint8_t idx = 0;
+    if (keyset & B_LN) idx |= 1;
+    if (keyset & B_LT) idx |= 2;
+    if (keyset & B_LK) idx |= 4;
+    return idx;
+}
+
+// 右手 index 0〜7
+static inline uint8_t mejiro_right_index(uint32_t keyset) {
+    uint8_t idx = 0;
+    if (keyset & B_RN) idx |= 1;
+    if (keyset & B_RT) idx |= 2;
+    if (keyset & B_RK) idx |= 4;
+    return idx;
+}
+
+// 一つのキーを tap 送信
+static inline void mejiro_tap(uint32_t kc, uint32_t timestamp) {
+    raise_zmk_keycode_state_changed_from_encoded(kc, true,  timestamp);
+    raise_zmk_keycode_state_changed_from_encoded(kc, false, timestamp);
+}
+
+// 左側 助詞 (index -> 「、」「に」「の」「で」「と」「を」「か」)
+static void mejiro_send_left(uint8_t idx, uint32_t timestamp) {
+    switch (idx) {
+    case 0: // ""
+        break;
+    case 1: // "、"
+        mejiro_tap(COMMA, timestamp);
+        break;
+    case 2: // "に" -> "ni"
+        mejiro_tap(N, timestamp);
+        mejiro_tap(I, timestamp);
+        break;
+    case 3: // "の" -> "no"
+        mejiro_tap(N, timestamp);
+        mejiro_tap(O, timestamp);
+        break;
+    case 4: // "で" -> "de"
+        mejiro_tap(D, timestamp);
+        mejiro_tap(E, timestamp);
+        break;
+    case 5: // "と" -> "to"
+        mejiro_tap(T, timestamp);
+        mejiro_tap(O, timestamp);
+        break;
+    case 6: // "を" -> "wo"
+        mejiro_tap(W, timestamp);
+        mejiro_tap(O, timestamp);
+        break;
+    case 7: // "か" -> "ka"
+        mejiro_tap(K, timestamp);
+        mejiro_tap(A, timestamp);
+        break;
+    }
+}
+
+// 右側 助詞 (index -> 「、」「は」「が」「も」「は、」「が、」「も、」)
+static void mejiro_send_right(uint8_t idx, uint32_t timestamp) {
+    switch (idx) {
+    case 0: // ""
+        break;
+    case 1: // "、"
+        mejiro_tap(COMMA, timestamp);
+        break;
+    case 2: // "は" -> "ha"
+        mejiro_tap(H, timestamp);
+        mejiro_tap(A, timestamp);
+        break;
+    case 3: // "が" -> "ga"
+        mejiro_tap(G, timestamp);
+        mejiro_tap(A, timestamp);
+        break;
+    case 4: // "も" -> "mo"
+        mejiro_tap(M, timestamp);
+        mejiro_tap(O, timestamp);
+        break;
+    case 5: // "は、" -> "ha" + "、"
+        mejiro_tap(H, timestamp);
+        mejiro_tap(A, timestamp);
+        mejiro_tap(COMMA, timestamp);
+        break;
+    case 6: // "が、" -> "ga" + "、"
+        mejiro_tap(G, timestamp);
+        mejiro_tap(A, timestamp);
+        mejiro_tap(COMMA, timestamp);
+        break;
+    case 7: // "も、" -> "mo" + "、"
+        mejiro_tap(M, timestamp);
+        mejiro_tap(O, timestamp);
+        mejiro_tap(COMMA, timestamp);
+        break;
+    }
+}
+
+// Mejiro 助詞の判定と出力。
+// keyset に粒キー以外が含まれていれば false を返す。
+static bool mejiro_try_particle(uint32_t keyset, uint32_t timestamp) {
+    if (keyset & ~MEJIRO_MASK) {
+        return false;
+    }
+
+    uint8_t li = mejiro_left_index(keyset);
+    uint8_t ri = mejiro_right_index(keyset);
+
+    if (!li && !ri) {
+        return false;
+    }
+
+    // 左右両方押されていたら 左→右 の順で出力
+    if (li) {
+        mejiro_send_left(li, timestamp);
+    }
+    if (ri) {
+        mejiro_send_right(ri, timestamp);
+    }
+
+    return true;
+}
+
 // カナ変換テーブル
 typedef struct {
     uint32_t shift;
@@ -704,7 +843,14 @@ void ng_type(NGList *keys) {
         keyset |= ng_key[k->elements[i] - A];
     }
 
+    // Mejiro 助詞ストローク判定
+    if (mejiro_try_particle(keyset, timestamp)) {
+        LOG_DBG("<NAGINATA NG_TYPE (mejiro particle)");
+        return;
+    }
+
     for (int i = 0; i < sizeof ngdickana / sizeof ngdickana[0]; i++) {
+for (int i = 0; i < sizeof ngdickana / sizeof ngdickana[0]; i++) {
         if ((ngdickana[i].shift | ngdickana[i].douji) == keyset) {
             if (ngdickana[i].kana[0] != NONE) {
                 for (int kk = 0; kk < 6; kk++) {
