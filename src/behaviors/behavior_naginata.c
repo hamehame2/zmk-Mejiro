@@ -16,231 +16,151 @@
 
 #include <zmk_naginata/nglist.h>
 #include <zmk_naginata/nglistarray.h>
+#include <zmk_naginata/naginata.h>
 #include <zmk_naginata/naginata_func.h>
 
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
-extern int64_t timestamp;
 
-#define NONE 0
-
-// 薙刀式
-
-// 31キーを32bitの各ビットに割り当てる
-#define B_Q (1UL << 0)
-#define B_W (1UL << 1)
-#define B_E (1UL << 2)
-#define B_R (1UL << 3)
-#define B_T (1UL << 4)
-
-#define B_Y (1UL << 5)
-#define B_U (1UL << 6)
-#define B_I (1UL << 7)
-#define B_O (1UL << 8)
-#define B_P (1UL << 9)
-
-#define B_A (1UL << 10)
-#define B_S (1UL << 11)
-#define B_D (1UL << 12)
-#define B_F (1UL << 13)
-#define B_G (1UL << 14)
-
-#define B_H (1UL << 15)
-#define B_J (1UL << 16)
-#define B_K (1UL << 17)
-#define B_L (1UL << 18)
-#define B_SEMI (1UL << 19)
-
-
-#define B_Z (1UL << 20)
-#define B_X (1UL << 21)
-#define B_C (1UL << 22)
-#define B_V (1UL << 23)
-#define B_B (1UL << 24)
-
-#define B_N (1UL << 25)
-#define B_M (1UL << 26)
-#define B_COMMA (1UL << 27)
-#define B_DOT (1UL << 28)
-#define B_SLASH (1UL << 29)
-
-#define B_SPACE (1UL << 30)
-#define B_SQT (1UL << 31)
-
-static NGListArray nginput;
-static uint32_t pressed_keys = 0UL; // 押しているキーのビットをたてる
-static int8_t n_pressed_keys = 0;   // 押しているキーの数
-
-#define NG_WINDOWS 0
-#define NG_MACOS 1
-#define NG_LINUX 2
-#define NG_IOS 3
-
-// EEPROMに保存する設定
-typedef union {
-    uint8_t os : 2;  // 2 bits can store values 0-3 (NG_WINDOWS, NG_MACOS, NG_LINUX, NG_IOS)
-    bool tategaki : true; // true: 縦書き, false: 横書き
-} user_config_t;
-
-extern user_config_t naginata_config;
-
-static const uint32_t ng_key[] = {
-    [A - A] = B_A,     [B - A] = B_B,         [C - A] = B_C,         [D - A] = B_D,
-    [E - A] = B_E,     [F - A] = B_F,         [G - A] = B_G,         [H - A] = B_H,
-    [I - A] = B_I,     [J - A] = B_J,         [K - A] = B_K,         [L - A] = B_L,
-    [M - A] = B_M,     [N - A] = B_N,         [O - A] = B_O,         [P - A] = B_P,
-    [Q - A] = B_Q,     [R - A] = B_R,         [S - A] = B_S,         [T - A] = B_T,
-    [U - A] = B_U,     [V - A] = B_V,         [W - A] = B_W,         [X - A] = B_X,
-    [Y - A] = B_Y,     [Z - A] = B_Z,         [SEMI - A] = B_SEMI,   [COMMA - A] = B_COMMA, //[SQT - A] = B_SQT,
-    //[COMMA - A] = B_COMMA, [DOT - A] = B_DOT, [SLASH - A] = B_SLASH, [SPACE - A] = B_SPACE,
-    //[ENTER - A] = B_SPACE,
-    [DOT - A] = B_DOT, [SLASH - A] = B_SLASH, [SPACE - A] = B_SPACE, [ENTER - A] = B_SPACE,
-    [SQT - A] = B_SQT,
+struct naginata_config {
+    bool tategaki;
+    int os;
 };
 
+struct naginata_config naginata_config;
 
-// ====================================================================
-// Mejiro particle (助詞) support
-// ====================================================================
+static uint32_t pressed_keys;
+static int n_pressed_keys;
+static int64_t timestamp;
 
-// Mejiro 粒キーのビット割り当て
-// 仮に C/V/B と ,/. / を使用。物理キーとの紐付けは keymap 側で行う。
-#define B_LN  B_C        // left n
-#define B_LT  B_V        // left t
-#define B_LK  B_B        // left k
+extern bool ng_excluded;
+extern bool ng_enabled;
+extern uint32_t (*ng_mode_keymap)[2];
 
-#define B_RN  B_N    // right n
-#define B_RT  B_M      // right t
-#define B_RK  B_COMMA    // right k
+/*
+ * Windows の全角とMac, iOS, Androidの全角
+ *  0x0001-0x00FF はUSキーボードそのまま
+ * Windows: ｧ 00C0 ｨ 00C1 ｩ 00C2 ｪ 00C3 ｫ 00C4 ｯ 00C5 ｬ 00C6 ｭ 00C7 ｮ 00C8
+ *          ｡ 00C9 ｢ 00CA ｣ 00CB ､ 00CC ･ 00CD ｦ 00CE ｱ 00CF ｲ 00D0 ｳ 00D1 ｴ 00D2 ｵ 00D3
+ *          ｶ 00D4 ｷ 00D5 ｸ 00D6 ｹ 00D7 ｺ 00D8 ｻ 00D9 ｼ 00DA ｽ 00DB ｾ 00DC ｿ 00DD ﾀ 00DE
+ *          ﾁ 00DF ﾂ 00E0 ﾃ 00E1 ﾄ 00E2 ﾅ 00E3 ﾆ 00E4 ﾇ 00E5 ﾈ 00E6 ﾉ 00E7 ﾊ 00E8 ﾋ 00E9
+ *          ﾌ 00EA ﾍ 00EB ﾎ 00EC ﾏ 00ED ﾐ 00EE ﾑ 00EF ﾒ 00F0 ﾓ 00F1 ﾔ 00F2 ﾕ 00F3 ﾖ 00F4
+ *          ﾗ 00F5 ﾘ 00F6 ﾙ 00F7 ﾚ 00F8 ﾛ 00F9 ﾜ 00FA ﾝ 00FBﾞ 00FC ﾟ 00FD
+ * Mac: ｧ 00A7 ｨ 00A8 ｩ 00A9 ｪ 00AA ｫ 00AB ｯ 00AC ｬ 00AD ｭ 00AE ｮ 00AF
+ *      ｡ 00B0 ｢ 00B1 ｣ 00B2 ､ 00B3 ･ 00B4 ｦ 00B5 ｱ 00B6 ｲ 00B7 ｳ 00B8 ｴ 00B9 ｵ 00BA
+ *      ｶ 00BB ｷ 00BC ｸ 00BD ｹ 00BE ｺ 00BF ｻ 00C0 ｼ 00C1 ｽ 00C2 ｾ 00C3 ｿ 00C4 ﾀ 00C5
+ *      ﾁ 00C6 ﾂ 00C7 ﾃ 00C8 ﾄ 00C9 ﾅ 00CA ﾆ 00CB ﾇ 00CC ﾈ 00CD ﾉ 00CE ﾊ 00CF ﾋ 00D0
+ *      ﾌ 00D1 ﾍ 00D2 ﾎ 00D3 ﾏ 00D4 ﾐ 00D5 ﾑ 00D6 ﾒ 00D7 ﾓ 00D8 ﾔ 00D9 ﾕ 00DA ﾖ 00DB
+ *      ﾗ 00DC ﾘ 00DD ﾙ 00DE ﾚ 00DF ﾛ 00E0 ﾜ 00E1 ﾝ 00E2ﾞ 00E3 ﾟ 00E4
+ * iOS, Android: ｧ 00A7 ｨ 00A8 ｩ 00A9 ｪ 00AA ｫ 00AB ｯ 00AC ｬ 00AD ｭ 00AE ｮ 00AF
+ *               ｡ 00B0 ｢ 00B1 ｣ 00B2 ､ 00B3 ･ 00B4 ｦ 00B5 ｱ 00B6 ｲ 00B7 ｳ 00B8 ｴ 00B9 ｵ 00BA
+ *               ｶ 00BB ｷ 00BC ｸ 00BD ｹ 00BE ｺ 00BF ｻ 00C0 ｼ 00C1 ｽ 00C2 ｾ 00C3 ｿ 00C4 ﾀ 00C5
+ *               ﾁ 00C6 ﾂ 00C7 ﾃ 00C8 ﾄ 00C9 ﾅ 00CA ﾆ 00CB ﾇ 00CC ﾈ 00CD ﾉ 00CE ﾊ 00CF ﾋ 00D0
+ *               ﾌ 00D1 ﾍ 00D2 ﾎ 00D3 ﾏ 00D4 ﾐ 00D5 ﾑ 00D6 ﾒ 00D7 ﾓ 00D8 ﾔ 00D9 ﾕ 00DA ﾖ 00DB
+ *               ﾗ 00DC ﾘ 00DD ﾙ 00DE ﾚ 00DF ﾛ 00E0 ﾜ 00E1 ﾝ 00E2ﾞ 00E3 ﾟ 00E4
+ */
 
-#define MEJIRO_MASK  (B_LN | B_LT | B_LK | B_RN | B_RT | B_RK)
+/* shift = 00, douji = 01がシフトが効くキー */
 
-// 左手 index 0〜7
-static inline uint8_t mejiro_left_index(uint32_t keyset) {
-    uint8_t idx = 0;
-    if (keyset & B_LN) idx |= 1;
-    if (keyset & B_LT) idx |= 2;
-    if (keyset & B_LK) idx |= 4;
-    return idx;
-}
+#define NONE 0x00
 
-// 右手 index 0〜7
-static inline uint8_t mejiro_right_index(uint32_t keyset) {
-    uint8_t idx = 0;
-    if (keyset & B_RN) idx |= 1;
-    if (keyset & B_RT) idx |= 2;
-    if (keyset & B_RK) idx |= 4;
-    return idx;
-}
+/* shift keys: トグルする順番 */
+const uint32_t ng_shift_list[] = {
+    /* 各段にshiftを導入する場合は、ここにキーを追加する */
+    0,
+};
 
-// 一つのキーを tap 送信
-static inline void mejiro_tap(uint32_t kc, uint32_t timestamp) {
-    raise_zmk_keycode_state_changed_from_encoded(kc, true,  timestamp);
-    raise_zmk_keycode_state_changed_from_encoded(kc, false, timestamp);
-}
+/* 変換対象 */
+#define A KC_A
+#define B KC_B
+#define C KC_C
+#define D KC_D
+#define E KC_E
+#define F KC_F
+#define G KC_G
+#define H KC_H
+#define I KC_I
+#define J KC_J
+#define K KC_K
+#define L KC_L
+#define M KC_M
+#define N KC_N
+#define O KC_O
+#define P KC_P
+#define Q KC_Q
+#define R KC_R
+#define S KC_S
+#define T KC_T
+#define U KC_U
+#define V KC_V
+#define W KC_W
+#define X KC_X
+#define Y KC_Y
+#define Z KC_Z
 
-// 左側 助詞 (index -> 「、」「に」「の」「で」「と」「を」「か」)
-static void mejiro_send_left(uint8_t idx, uint32_t timestamp) {
-    switch (idx) {
-    case 0: // ""
-        break;
-    case 1: // "、"
-        mejiro_tap(COMMA, timestamp);
-        break;
-    case 2: // "に" -> "ni"
-        mejiro_tap(N, timestamp);
-        mejiro_tap(I, timestamp);
-        break;
-    case 3: // "の" -> "no"
-        mejiro_tap(N, timestamp);
-        mejiro_tap(O, timestamp);
-        break;
-    case 4: // "で" -> "de"
-        mejiro_tap(D, timestamp);
-        mejiro_tap(E, timestamp);
-        break;
-    case 5: // "と" -> "to"
-        mejiro_tap(T, timestamp);
-        mejiro_tap(O, timestamp);
-        break;
-    case 6: // "を" -> "wo"
-        mejiro_tap(W, timestamp);
-        mejiro_tap(O, timestamp);
-        break;
-    case 7: // "か" -> "ka"
-        mejiro_tap(K, timestamp);
-        mejiro_tap(A, timestamp);
-        break;
-    }
-}
+#define SPACE KC_SPACE
+#define ENTER KC_ENTER
+#define DOT KC_DOT
+#define COMMA KC_COMMA
+#define SLASH KC_SLASH
+#define SEMI KC_SEMICOLON
+#define SQT KC_APOSTROPHE
 
-// 右側 助詞 (index -> 「、」「は」「が」「も」「は、」「が、」「も、」)
-static void mejiro_send_right(uint8_t idx, uint32_t timestamp) {
-    switch (idx) {
-    case 0: // ""
-        break;
-    case 1: // "、"
-        mejiro_tap(COMMA, timestamp);
-        break;
-    case 2: // "は" -> "ha"
-        mejiro_tap(H, timestamp);
-        mejiro_tap(A, timestamp);
-        break;
-    case 3: // "が" -> "ga"
-        mejiro_tap(G, timestamp);
-        mejiro_tap(A, timestamp);
-        break;
-    case 4: // "も" -> "mo"
-        mejiro_tap(M, timestamp);
-        mejiro_tap(O, timestamp);
-        break;
-    case 5: // "は、" -> "ha" + "、"
-        mejiro_tap(H, timestamp);
-        mejiro_tap(A, timestamp);
-        mejiro_tap(COMMA, timestamp);
-        break;
-    case 6: // "が、" -> "ga" + "、"
-        mejiro_tap(G, timestamp);
-        mejiro_tap(A, timestamp);
-        mejiro_tap(COMMA, timestamp);
-        break;
-    case 7: // "も、" -> "mo" + "、"
-        mejiro_tap(M, timestamp);
-        mejiro_tap(O, timestamp);
-        mejiro_tap(COMMA, timestamp);
-        break;
-    }
-}
+/* keymap 平仮名変換用のキー定義 */
 
-// Mejiro 助詞の判定と出力。
-// keyset に粒キー以外が含まれていれば false を返す。
-static bool mejiro_try_particle(uint32_t keyset, uint32_t timestamp) {
-    if (keyset & ~MEJIRO_MASK) {
-        return false;
-    }
+#define B_A (1UL << 0)
+#define B_B (1UL << 1)
+#define B_C (1UL << 2)
+#define B_D (1UL << 3)
+#define B_E (1UL << 4)
+#define B_F (1UL << 5)
+#define B_G (1UL << 6)
+#define B_H (1UL << 7)
+#define B_I (1UL << 8)
+#define B_J (1UL << 9)
+#define B_K (1UL << 10)
+#define B_L (1UL << 11)
+#define B_M (1UL << 12)
+#define B_N (1UL << 13)
+#define B_O (1UL << 14)
+#define B_P (1UL << 15)
+#define B_Q (1UL << 16)
+#define B_R (1UL << 17)
+#define B_S (1UL << 18)
+#define B_T (1UL << 19)
+#define B_U (1UL << 20)
+#define B_V (1UL << 21)
+#define B_W (1UL << 22)
+#define B_X (1UL << 23)
+#define B_Y (1UL << 24)
+#define B_Z (1UL << 25)
+#define B_SPACE (1UL << 26)
+#define B_ENTER (1UL << 27)
+#define B_DOT (1UL << 28)
+#define B_COMMA (1UL << 29)
+#define B_SLASH (1UL << 30)
+#define B_SEMI (1UL << 31)
 
-    uint8_t li = mejiro_left_index(keyset);
-    uint8_t ri = mejiro_right_index(keyset);
+/* 変換対象のキーマップ（shiftキーとして使うキーには01を足すこと） */
 
-    if (!li && !ri) {
-        return false;
-    }
+const uint32_t ng_key[30] = {
+    B_A,     B_B,     B_C,     B_D,     B_E,     B_F,     B_G, B_H,
+    B_I,     B_J,     B_K,     B_L,     B_M,     B_N,     B_O, B_P,
+    B_Q,     B_R,     B_S,     B_T,     B_U,     B_V,     B_W, B_X,
+    B_Y,     B_Z,     B_SPACE, B_ENTER, B_DOT,   B_COMMA,
+};
 
-    // 左右両方押されていたら 左→右 の順で出力
-    if (li) {
-        mejiro_send_left(li, timestamp);
-    }
-    if (ri) {
-        mejiro_send_right(ri, timestamp);
-    }
+enum {
+    NG_WINDOWS,
+    NG_MACOS,
+    NG_LINUX,
+};
 
-    return true;
-}
+/* 平仮名変換テーブル */
 
-// カナ変換テーブル
 typedef struct {
     uint32_t shift;
     uint32_t douji;
-    uint32_t kana[6];
+    uint8_t kana[6];
     void (*func)(void);
 } naginata_kanamap;
 
@@ -264,9 +184,9 @@ static naginata_kanamap ngdickana[] = {
 
     {.shift = NONE    , .douji = B_E            , .kana = {H, A, NONE, NONE, NONE, NONE   }, .func = nofunc }, // は
     {.shift = NONE    , .douji = B_D            , .kana = {K, A, NONE, NONE, NONE, NONE   }, .func = nofunc }, // か
-    //{.shift = NONE    , .douji = B_M            , .kana = {T, A, NONE, NONE, NONE, NONE   }, .func = nofunc }, // た/////
+    //{.shift = NONE    , .douji = B_M            , .kana = {T, A, NONE, NONE, NONE, NONE   }, .func = nofunc }, // た///
 
-    //{.shift = NONE    , .douji = B_C            , .kana = {K, I, NONE, NONE, NONE, NONE   }, .func = nofunc }, // き/////
+    //{.shift = NONE    , .douji = B_C            , .kana = {K, I, NONE, NONE, NONE, NONE   }, .func = nofunc }, // き///
     {.shift = NONE    , .douji = B_X            , .kana = {M, A, NONE, NONE, NONE, NONE   }, .func = nofunc }, // ま
 
     {.shift = NONE    , .douji = B_P            , .kana = {H, I, NONE, NONE, NONE, NONE   }, .func = nofunc }, // ひ
@@ -279,7 +199,7 @@ static naginata_kanamap ngdickana[] = {
 
     {.shift = NONE    , .douji = B_A            , .kana = {N, O, NONE, NONE, NONE, NONE   }, .func = nofunc }, // の
 
-    //{.shift = NONE    , .douji = B_COMMA        , .kana = {D, E, NONE, NONE, NONE, NONE   }, .func = nofunc }, // で/////
+    //{.shift = NONE    , .douji = B_COMMA        , .kana = {D, E, NONE, NONE, NONE, NONE   }, .func = nofunc }, // で////
     {.shift = NONE    , .douji = B_SEMI         , .kana = {N, A, NONE, NONE, NONE, NONE   }, .func = nofunc }, // な
     {.shift = NONE    , .douji = B_Q         , .kana = {MINUS, NONE, NONE, NONE, NONE, NONE   }, .func = nofunc }, // ー
     {.shift = NONE    , .douji = B_T         , .kana = {T, I, NONE, NONE, NONE, NONE   }, .func = nofunc }, // ち
@@ -311,7 +231,6 @@ static naginata_kanamap ngdickana[] = {
     {.shift = NONE    , .douji = B_D|B_H        , .kana = {H, E, NONE, NONE, NONE, NONE   }, .func = nofunc }, // へ
     {.shift = NONE     , .douji = B_D|B_J     , .kana = {A, NONE, NONE, NONE, NONE, NONE   }, .func = nofunc }, // あ
 
-
     {.shift = NONE     , .douji = B_D|B_SEMI        , .kana = {E, NONE, NONE, NONE, NONE, NONE   }, .func = nofunc }, // え
     {.shift = NONE     , .douji = B_K|B_Z        , .kana = {D, U, NONE, NONE, NONE, NONE   }, .func = nofunc }, // づ
     {.shift = NONE    , .douji = B_K|B_X        , .kana = {Z, O, NONE, NONE, NONE, NONE   }, .func = nofunc }, // ぞ
@@ -323,6 +242,7 @@ static naginata_kanamap ngdickana[] = {
     {.shift = NONE    , .douji = B_D|B_COMMA        , .kana = {B, E, NONE, NONE, NONE, NONE   }, .func = nofunc }, // べ
     {.shift = NONE    , .douji = B_D|B_DOT        , .kana = {P, U, NONE, NONE, NONE, NONE   }, .func = nofunc }, // ぷ
     {.shift = NONE    , .douji = B_D|B_SLASH        , .kana = {V, U, NONE, NONE, NONE, NONE   }, .func = nofunc }, // ゔ
+
 
 
 
@@ -430,94 +350,7 @@ static naginata_kanamap ngdickana[] = {
 
     {.shift = NONE    , .douji = B_SQT|B_S        , .kana = {K, W, A, NONE, NONE, NONE   }, .func = nofunc }, // クァ
 
-    // 小書き
-    //{.shift = NONE    , .douji = B_Q|B_H        , .kana = {X, Y, A, NONE, NONE, NONE      }, .func = nofunc }, // ゃ
-    //{.shift = NONE    , .douji = B_Q|B_P        , .kana = {X, Y, U, NONE, NONE, NONE      }, .func = nofunc }, // ゅ
-    //{.shift = NONE    , .douji = B_Q|B_I        , .kana = {X, Y, O, NONE, NONE, NONE      }, .func = nofunc }, // ょ
-    //{.shift = NONE    , .douji = B_Q|B_J        , .kana = {X, A, NONE, NONE, NONE, NONE   }, .func = nofunc }, // ぁ
-    //{.shift = NONE    , .douji = B_Q|B_K        , .kana = {X, I, NONE, NONE, NONE, NONE   }, .func = nofunc }, // ぃ
-    //{.shift = NONE    , .douji = B_Q|B_L        , .kana = {X, U, NONE, NONE, NONE, NONE   }, .func = nofunc }, // ぅ
-    //{.shift = NONE    , .douji = B_Q|B_O        , .kana = {X, E, NONE, NONE, NONE, NONE   }, .func = nofunc }, // ぇ
-    //{.shift = NONE    , .douji = B_Q|B_N        , .kana = {X, O, NONE, NONE, NONE, NONE   }, .func = nofunc }, // ぉ
-    //{.shift = NONE    , .douji = B_Q|B_DOT      , .kana = {X, W, A, NONE, NONE, NONE      }, .func = nofunc }, // ゎ
-    //{.shift = NONE    , .douji = B_G            , .kana = {X, T, U, NONE, NONE, NONE      }, .func = nofunc }, // っ
-    //{.shift = NONE    , .douji = B_Q|B_S        , .kana = {X, K, E, NONE, NONE, NONE      }, .func = nofunc }, // ヶ入れなくていいよね
-    //{.shift = NONE    , .douji = B_Q|B_F        , .kana = {X, K, A, NONE, NONE, NONE      }, .func = nofunc }, // ヵ入れなくていいよね
 
-    // 清音拗音 濁音拗音 半濁拗音
-    //{.shift = NONE    , .douji = B_R|B_H        , .kana = {S, Y, A, NONE, NONE, NONE      }, .func = nofunc }, // しゃ
-    //{.shift = NONE    , .douji = B_R|B_P        , .kana = {S, Y, U, NONE, NONE, NONE      }, .func = nofunc }, // しゅ
-    //{.shift = NONE    , .douji = B_R|B_I        , .kana = {S, Y, O, NONE, NONE, NONE      }, .func = nofunc }, // しょ
-    //{.shift = NONE    , .douji = B_J|B_R|B_H    , .kana = {Z, Y, A, NONE, NONE, NONE      }, .func = nofunc }, // じゃ
-    //{.shift = NONE    , .douji = B_J|B_R|B_P    , .kana = {Z, Y, U, NONE, NONE, NONE      }, .func = nofunc }, // じゅ
-    //{.shift = NONE    , .douji = B_J|B_R|B_I    , .kana = {Z, Y, O, NONE, NONE, NONE      }, .func = nofunc }, // じょ
-    //{.shift = NONE    , .douji = B_W|B_H        , .kana = {K, Y, A, NONE, NONE, NONE      }, .func = nofunc }, // きゃ
-    //{.shift = NONE    , .douji = B_W|B_P        , .kana = {K, Y, U, NONE, NONE, NONE      }, .func = nofunc }, // きゅ
-    //{.shift = NONE    , .douji = B_W|B_I        , .kana = {K, Y, O, NONE, NONE, NONE      }, .func = nofunc }, // きょ
-    //{.shift = NONE    , .douji = B_J|B_W|B_H    , .kana = {G, Y, A, NONE, NONE, NONE      }, .func = nofunc }, // ぎゃ
-    //{.shift = NONE    , .douji = B_J|B_W|B_P    , .kana = {G, Y, U, NONE, NONE, NONE      }, .func = nofunc }, // ぎゅ
-    //{.shift = NONE    , .douji = B_J|B_W|B_I    , .kana = {G, Y, O, NONE, NONE, NONE      }, .func = nofunc }, // ぎょ
-    //{.shift = NONE    , .douji = B_G|B_H        , .kana = {T, Y, A, NONE, NONE, NONE      }, .func = nofunc }, // ちゃ
-    //{.shift = NONE    , .douji = B_G|B_P        , .kana = {T, Y, U, NONE, NONE, NONE      }, .func = nofunc }, // ちゅ
-    //{.shift = NONE    , .douji = B_G|B_I        , .kana = {T, Y, O, NONE, NONE, NONE      }, .func = nofunc }, // ちょ
-    //{.shift = NONE    , .douji = B_J|B_G|B_H    , .kana = {D, Y, A, NONE, NONE, NONE      }, .func = nofunc }, // ぢゃいるこれ？
-    //{.shift = NONE    , .douji = B_J|B_G|B_P    , .kana = {D, Y, U, NONE, NONE, NONE      }, .func = nofunc }, // ぢゅいるこれ？
-    //{.shift = NONE    , .douji = B_J|B_G|B_I    , .kana = {D, Y, O, NONE, NONE, NONE      }, .func = nofunc }, // ぢょいるこれ？
-    //{.shift = NONE    , .douji = B_D|B_H        , .kana = {N, Y, A, NONE, NONE, NONE      }, .func = nofunc }, // にゃ
-    //{.shift = NONE    , .douji = B_D|B_P        , .kana = {N, Y, U, NONE, NONE, NONE      }, .func = nofunc }, // にゅ
-    //{.shift = NONE    , .douji = B_D|B_I        , .kana = {N, Y, O, NONE, NONE, NONE      }, .func = nofunc }, // にょ
-    //{.shift = NONE    , .douji = B_X|B_H        , .kana = {H, Y, A, NONE, NONE, NONE      }, .func = nofunc }, // ひゃ
-    //{.shift = NONE    , .douji = B_X|B_P        , .kana = {H, Y, U, NONE, NONE, NONE      }, .func = nofunc }, // ひゅ
-    //{.shift = NONE    , .douji = B_X|B_I        , .kana = {H, Y, O, NONE, NONE, NONE      }, .func = nofunc }, // ひょ
-    //{.shift = NONE    , .douji = B_J|B_X|B_H    , .kana = {B, Y, A, NONE, NONE, NONE      }, .func = nofunc }, // びゃ
-    //{.shift = NONE    , .douji = B_J|B_X|B_P    , .kana = {B, Y, U, NONE, NONE, NONE      }, .func = nofunc }, // びゅ
-    //{.shift = NONE    , .douji = B_J|B_X|B_I    , .kana = {B, Y, O, NONE, NONE, NONE      }, .func = nofunc }, // びょ
-    //{.shift = NONE    , .douji = B_M|B_X|B_H    , .kana = {P, Y, A, NONE, NONE, NONE      }, .func = nofunc }, // ぴゃ
-    //{.shift = NONE    , .douji = B_M|B_X|B_P    , .kana = {P, Y, U, NONE, NONE, NONE      }, .func = nofunc }, // ぴゅ
-    //{.shift = NONE    , .douji = B_M|B_X|B_I    , .kana = {P, Y, O, NONE, NONE, NONE      }, .func = nofunc }, // ぴょ
-    //{.shift = NONE    , .douji = B_S|B_H        , .kana = {M, Y, A, NONE, NONE, NONE      }, .func = nofunc }, // みゃ
-    //{.shift = NONE    , .douji = B_S|B_P        , .kana = {M, Y, U, NONE, NONE, NONE      }, .func = nofunc }, // みゅ
-    //{.shift = NONE    , .douji = B_S|B_I        , .kana = {M, Y, O, NONE, NONE, NONE      }, .func = nofunc }, // みょ
-    //{.shift = NONE    , .douji = B_E|B_H        , .kana = {R, Y, A, NONE, NONE, NONE      }, .func = nofunc }, // りゃ
-    //{.shift = NONE    , .douji = B_E|B_P        , .kana = {R, Y, U, NONE, NONE, NONE      }, .func = nofunc }, // りゅ
-    //{.shift = NONE    , .douji = B_E|B_I        , .kana = {R, Y, O, NONE, NONE, NONE      }, .func = nofunc }, // りょ
-
-    // 清音外来音 濁音外来音
-    //{.shift = NONE    , .douji = B_M|B_E|B_K    , .kana = {T, H, I, NONE, NONE, NONE      }, .func = nofunc }, // てぃ
-    //{.shift = NONE    , .douji = B_M|B_E|B_P    , .kana = {T, E, X, Y, U, NONE            }, .func = nofunc }, // てゅ
-    //{.shift = NONE    , .douji = B_J|B_E|B_K    , .kana = {D, H, I, NONE, NONE, NONE      }, .func = nofunc }, // でぃ
-    //{.shift = NONE    , .douji = B_J|B_E|B_P    , .kana = {D, H, U, NONE, NONE, NONE      }, .func = nofunc }, // でゅ
-    //{.shift = NONE    , .douji = B_M|B_D|B_L    , .kana = {T, O, X, U, NONE, NONE         }, .func = nofunc }, // とぅ
-    //{.shift = NONE    , .douji = B_J|B_D|B_L    , .kana = {D, O, X, U, NONE, NONE         }, .func = nofunc }, // どぅ
-    //{.shift = NONE    , .douji = B_M|B_R|B_O    , .kana = {S, Y, E, NONE, NONE, NONE      }, .func = nofunc }, // しぇ
-    //{.shift = NONE    , .douji = B_M|B_G|B_O    , .kana = {T, Y, E, NONE, NONE, NONE      }, .func = nofunc }, // ちぇ
-    //{.shift = NONE    , .douji = B_J|B_R|B_O    , .kana = {Z, Y, E, NONE, NONE, NONE      }, .func = nofunc }, // じぇ
-    //{.shift = NONE    , .douji = B_J|B_G|B_O    , .kana = {D, Y, E, NONE, NONE, NONE      }, .func = nofunc }, // ぢぇnoneed
-    //{.shift = NONE    , .douji = B_V|B_SEMI|B_J , .kana = {F, A, NONE, NONE, NONE, NONE   }, .func = nofunc }, // ふぁ
-    //{.shift = NONE    , .douji = B_V|B_SEMI|B_K , .kana = {F, I, NONE, NONE, NONE, NONE   }, .func = nofunc }, // ふぃ
-    //{.shift = NONE    , .douji = B_V|B_SEMI|B_O , .kana = {F, E, NONE, NONE, NONE, NONE   }, .func = nofunc }, // ふぇ
-    //{.shift = NONE    , .douji = B_V|B_SEMI|B_N , .kana = {F, O, NONE, NONE, NONE, NONE   }, .func = nofunc }, // ふぉ
-    //{.shift = NONE    , .douji = B_V|B_SEMI|B_P , .kana = {F, Y, U, NONE, NONE, NONE      }, .func = nofunc }, // ふゅ一応あるから
-    //{.shift = NONE    , .douji = B_V|B_K|B_O    , .kana = {I, X, E, NONE, NONE, NONE      }, .func = nofunc }, // いぇはない
-    //{.shift = NONE    , .douji = B_V|B_L|B_K    , .kana = {W, I, NONE, NONE, NONE, NONE   }, .func = nofunc }, // うぃ
-    //{.shift = NONE    , .douji = B_V|B_L|B_O    , .kana = {W, E, NONE, NONE, NONE, NONE   }, .func = nofunc }, // うぇ
-    //{.shift = NONE    , .douji = B_V|B_L|B_N    , .kana = {U, X, O, NONE, NONE, NONE      }, .func = nofunc }, // うぉ
-    //{.shift = NONE    , .douji = B_F|B_L|B_J    , .kana = {V, A, NONE, NONE, NONE, NONE   }, .func = nofunc }, // ゔぁ
-    //{.shift = NONE    , .douji = B_F|B_L|B_K    , .kana = {V, I, NONE, NONE, NONE, NONE   }, .func = nofunc }, // ゔぃ
-    //{.shift = NONE    , .douji = B_F|B_L|B_O    , .kana = {V, E, NONE, NONE, NONE, NONE   }, .func = nofunc }, // ゔぇはないnoneed
-    //{.shift = NONE    , .douji = B_F|B_L|B_N    , .kana = {V, O, NONE, NONE, NONE, NONE   }, .func = nofunc }, // ゔぉはないnoneed
-    //{.shift = NONE    , .douji = B_F|B_L|B_P    , .kana = {V, U, X, Y, U, NONE            }, .func = nofunc }, // ゔゅはない
-    //{.shift = NONE    , .douji = B_V|B_H|B_J    , .kana = {K, U, X, A, NONE, NONE         }, .func = nofunc }, // くぁはないnoneed
-    //{.shift = NONE    , .douji = B_V|B_H|B_K    , .kana = {K, U, X, I, NONE, NONE         }, .func = nofunc }, // くぃはない
-    //{.shift = NONE    , .douji = B_V|B_H|B_O    , .kana = {K, U, X, E, NONE, NONE         }, .func = nofunc }, // くぇはない
-    //{.shift = NONE    , .douji = B_V|B_H|B_N    , .kana = {K, U, X, O, NONE, NONE         }, .func = nofunc }, // くぉはない
-    //{.shift = NONE    , .douji = B_V|B_H|B_DOT  , .kana = {K, U, X, W, A, NONE            }, .func = nofunc }, // くゎはない
-    //{.shift = NONE    , .douji = B_F|B_H|B_J    , .kana = {G, U, X, A, NONE, NONE         }, .func = nofunc }, // ぐぁはないいらないんじゃ
-    //{.shift = NONE    , .douji = B_F|B_H|B_K    , .kana = {G, U, X, I, NONE, NONE         }, .func = nofunc }, // ぐぃいらない
-    //{.shift = NONE    , .douji = B_F|B_H|B_O    , .kana = {G, U, X, E, NONE, NONE         }, .func = nofunc }, // ぐぇはないいらないんじゃ
-    //{.shift = NONE    , .douji = B_F|B_H|B_N    , .kana = {G, U, X, O, NONE, NONE         }, .func = nofunc }, // ぐぉいらない
-    //{.shift = NONE    , .douji = B_F|B_H|B_DOT  , .kana = {G, U, X, W, A, NONE            }, .func = nofunc }, // ぐゎはないnoneed
-    //{.shift = NONE    , .douji = B_V|B_L|B_J    , .kana = {T, S, A, NONE, NONE, NONE      }, .func = nofunc }, // つぁはない
 
     // げうぉ外来音とネットスラングを親指のNGスペースにて
     {.shift = B_SPACE , .douji = B_Q            , .kana = {X, W, A, NONE, NONE, NONE   }, .func = nofunc }, // ゎ
@@ -559,7 +392,7 @@ static naginata_kanamap ngdickana[] = {
     //{.shift = B_SPACE , .douji = B_M            , .kana = {DOT, ENTER, NONE, NONE, NONE, NONE   }, .func = nofunc},
     //{.shift = NONE    , .douji = B_U            , .kana = {BSPC, NONE, NONE, NONE, NONE, NONE   }, .func = nofunc},
 
-    //{.shift = NONE    , .douji = B_V|B_M        , .kana = {ENTER, NONE, NONE, NONE, NONE, NONE  }, .func = nofunc}, // enter/////////
+    //{.shift = NONE    , .douji = B_V|B_M        , .kana = {ENTER, NONE, NONE, NONE, NONE, NONE  }, .func = nofunc}, // enter////
     // {.shift = B_SPACE, .douji = B_V|B_M, .kana = {ENTER, NONE, NONE, NONE, NONE, NONE}, .func = nofunc}, // enter+シフト(連続シフト)
 
     //{.shift = NONE    , .douji = B_T            , .kana = {NONE, NONE, NONE, NONE, NONE, NONE   }, .func = ng_T}, //
@@ -567,7 +400,7 @@ static naginata_kanamap ngdickana[] = {
     //{.shift = B_SPACE , .douji = B_T            , .kana = {NONE, NONE, NONE, NONE, NONE, NONE   }, .func = ng_ST}, //
     //{.shift = B_SPACE , .douji = B_Y            , .kana = {NONE, NONE, NONE, NONE, NONE, NONE   }, .func = ng_SY}, //
 
-//{.shift = NONE    , .douji = B_H|B_J        , .kana = {NONE, NONE, NONE, NONE, NONE, NONE   }, .func = naginata_on}, // 　かなオン//////
+//{.shift = NONE    , .douji = B_H|B_J        , .kana = {NONE, NONE, NONE, NONE, NONE, NONE   }, .func = naginata_on}, // 　かなオン///
     // {.shift = NONE, .douji = B_F | B_G, .kana = {NONE, NONE, NONE, NONE, NONE, NONE}, .func = naginata_off}, // 　かなオフ
 
     // 編集モード
@@ -641,7 +474,58 @@ static naginata_kanamap ngdickana[] = {
 
 };
 
-// Helper function for counting matches/candidates
+
+
+
+
+/* ============================================================
+ * ここからメジロ対応のための「左右分離」追加コード
+ * ============================================================ */
+
+// QWERTY 左手 / 右手判別
+static inline bool ng_is_left_key(uint32_t keycode) {
+    switch (keycode) {
+        // 左手
+        case Q: case W: case E: case R: case T:
+        case A: case S: case D: case F: case G:
+        case Z: case X: case C: case V: case B:
+            return true;
+
+        // 右手（＆その他）は false
+        case Y: case U: case I: case O: case P:
+        case H: case J: case K: case L: case SEMI: case SQT:
+        case N: case M: case COMMA: case DOT: case SLASH:
+        case SPACE: case ENTER:
+        default:
+            return false;
+    }
+}
+
+// NGList を「左→右」の順に並べ替える（stable）
+static void ng_stable_left_first(const NGList *in, NGList *out) {
+    initializeList(out);
+
+    // まず左手キーを順番通りに追加
+    for (int i = 0; i < in->size; i++) {
+        uint32_t kc = in->elements[i];
+        if (ng_is_left_key(kc)) {
+            addToList(out, kc);
+        }
+    }
+
+    // 次に右手キーを順番通りに追加
+    for (int i = 0; i < in->size; i++) {
+        uint32_t kc = in->elements[i];
+        if (!ng_is_left_key(kc)) {
+            addToList(out, kc);
+        }
+    }
+}
+
+
+
+
+
 static int count_kana_entries(NGList *keys, bool exact_match) {
   if (keys->size == 0) return 0;
 
@@ -724,71 +608,14 @@ int number_of_candidates(NGList *keys) {
   return result;
 }
 
-
-
-// =====================================
-// QWERTY 左右判別ヘルパ
-// =====================================
-
-// QWERTY 左手: Q W E R T / A S D F G / Z X C V B
-// 右手:        Y U I O P / H J K L ; ' / N M , . / としておく
-static inline bool ng_is_left_key(uint32_t keycode) {
-    switch (keycode) {
-        // 左手
-        case Q: case W: case E: case R: case T:
-        case A: case S: case D: case F: case G:
-        case Z: case X: case C: case V: case B:
-            return true;
-
-        // 右手（＆その他）は false
-        case Y: case U: case I: case O: case P:
-        case H: case J: case K: case L: case SEMI: case SQT:
-        case N: case M: case COMMA: case DOT: case SLASH:
-        case SPACE: case ENTER:
-        default:
-            return false;
-    }
-}
-
-
-// =====================================
-// NGList を「左→右」の順に並べ替える
-// （各グループ内では元の順番を保つ = stable）
-// =====================================
-static void ng_stable_left_first(const NGList *in, NGList *out) {
-    initializeList(out);
-
-    // まず左手キーを順番通りに追加
-    for (int i = 0; i < in->size; i++) {
-        uint32_t kc = in->elements[i];
-        if (ng_is_left_key(kc)) {
-            addToList(out, kc);
-        }
-    }
-
-    // 次に右手キーを順番通りに追加
-    for (int i = 0; i < in->size; i++) {
-        uint32_t kc = in->elements[i];
-        if (!ng_is_left_key(kc)) {
-            addToList(out, kc);
-        }
-    }
-}
-
-
-// 並べ替え→以降は並べ替え済みの k を使う」 形に変更
+// キー入力を文字に変換して出力する
 void ng_type(NGList *keys) {
     LOG_DBG(">NAGINATA NG_TYPE");
 
     if (keys->size == 0)
         return;
 
-    // ★ ここで「左→右」に安定並べ替え
-    NGList ordered;
-    ng_stable_left_first(keys, &ordered);
-    NGList *k = &ordered; // 以降 k を使う
-
-    if (k->size == 1 && k->elements[0] == ENTER) {
+    if (keys->size == 1 && keys->elements[0] == ENTER) {
         LOG_DBG(" NAGINATA type keycode 0x%02X", ENTER);
         raise_zmk_keycode_state_changed_from_encoded(ENTER, true, timestamp);
         raise_zmk_keycode_state_changed_from_encoded(ENTER, false, timestamp);
@@ -796,27 +623,20 @@ void ng_type(NGList *keys) {
     }
 
     uint32_t keyset = 0UL;
-    for (int i = 0; i < k->size; i++) {
-        keyset |= ng_key[k->elements[i] - A];
-    }
-
-    // Mejiro 助詞ストローク判定
-    if (mejiro_try_particle(keyset, timestamp)) {
-        LOG_DBG("<NAGINATA NG_TYPE (mejiro particle)");
-        return;
+    for (int i = 0; i < keys->size; i++) {
+        keyset |= ng_key[keys->elements[i] - A];
     }
 
     for (int i = 0; i < sizeof ngdickana / sizeof ngdickana[0]; i++) {
-for (int i = 0; i < sizeof ngdickana / sizeof ngdickana[0]; i++) {
         if ((ngdickana[i].shift | ngdickana[i].douji) == keyset) {
             if (ngdickana[i].kana[0] != NONE) {
-                for (int kk = 0; kk < 6; kk++) {
-                    if (ngdickana[i].kana[kk] == NONE)
+                for (int k = 0; k < 6; k++) {
+                    if (ngdickana[i].kana[k] == NONE)
                         break;
-                    LOG_DBG(" NAGINATA type keycode 0x%02X", ngdickana[i].kana[kk]);
-                    raise_zmk_keycode_state_changed_from_encoded(ngdickana[i].kana[kk], true,
+                    LOG_DBG(" NAGINATA type keycode 0x%02X", ngdickana[i].kana[k]);
+                    raise_zmk_keycode_state_changed_from_encoded(ngdickana[i].kana[k], true,
                                                                  timestamp);
-                    raise_zmk_keycode_state_changed_from_encoded(ngdickana[i].kana[kk], false,
+                    raise_zmk_keycode_state_changed_from_encoded(ngdickana[i].kana[k], false,
                                                                  timestamp);
                 }
             } else {
@@ -832,15 +652,20 @@ for (int i = 0; i < sizeof ngdickana / sizeof ngdickana[0]; i++) {
     NGList a, b;
     initializeList(&a);
     initializeList(&b);
-    for (int i = 0; i < k->size - 1; i++) {
-        addToList(&a, k->elements[i]);
+    for (int i = 0; i < keys->size - 1; i++) {
+        addToList(&a, keys->elements[i]);
     }
-    addToList(&b, k->elements[k->size - 1]);
+    addToList(&b, keys->elements[keys->size - 1]);
     ng_type(&a);
     ng_type(&b);
 
     LOG_DBG("<NAGINATA NG_TYPE");
 }
+
+
+
+
+
 
 
 // 薙刀式の入力処理
