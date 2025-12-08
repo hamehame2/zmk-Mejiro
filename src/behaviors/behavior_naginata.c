@@ -587,6 +587,187 @@ int number_of_candidates(NGList *keys) {
   return result;
 }
 
+
+
+
+// Mejiro 粒ベース: 左手 cvb, 右手 n m ,
+static int mej_ntk_map(uint32_t kc, char *out_code) {
+    switch (kc) {
+        // 左手: C, V, B -> n, t, k
+        case C:
+            *out_code = 'n';
+            return 1; // left
+        case V:
+            *out_code = 't';
+            return 1;
+        case B:
+            *out_code = 'k';
+            return 1;
+
+        // 右手: N, M, COMMA -> n, t, k
+        case COMMA:
+            *out_code = 'n';
+            return 2; // right
+        case M:
+            *out_code = 't';
+            return 2;
+        case N:
+            *out_code = 'k';
+            return 2;
+
+        default:
+            return 0; // Mejiro 粒ではない
+    }
+}
+
+// このストロークが「cvb / n m , だけ」で構成されているか？
+static bool mej_is_pure_ntk_stroke(NGList *keys) {
+    if (keys->size == 0) {
+        return false;
+    }
+    for (int i = 0; i < keys->size; i++) {
+        char code;
+        if (mej_ntk_map(keys->elements[i], &code) == 0) {
+            return false;
+        }
+    }
+    return true;
+}
+
+
+
+// Mejiro の ntk 例外マップをキーボード側で実装する
+// 戻り値: 処理したら true（= ng_type() 本体はスキップしてよい）
+static bool mej_handle_ntk_exception(NGList *keys) {
+    bool l_n = false, l_t = false, l_k = false;
+    bool r_n = false, r_t = false, r_k = false;
+
+    // 左右の n/t/k を集計
+    for (int i = 0; i < keys->size; i++) {
+        uint32_t kc = keys->elements[i];
+        char code;
+        int side = mej_ntk_map(kc, &code);
+        if (side == 0) {
+            // 想定外が混ざっていたら何もしない
+            return false;
+        }
+
+        if (side == 1) {
+            if (code == 'n') l_n = true;
+            if (code == 't') l_t = true;
+            if (code == 'k') l_k = true;
+        } else {
+            if (code == 'n') r_n = true;
+            if (code == 't') r_t = true;
+            if (code == 'k') r_k = true;
+        }
+    }
+
+    // ---- ここから Mejiro EXCEPTION_STROKE_MAP を ZMK に落とし込む ----
+    // Python 側:
+    // "-n":  Return
+    // "n-":  Space
+    // "n-n": Space + Return
+    // "-nt": "。"
+    // "-nk": "、"
+    // "-ntk": "や"
+    // "n-nt": "?"
+    // "n-nk": "!"
+    // "n-ntk": "や、"
+
+    // 1) "-n" : 右 n のみ → Enter
+    if (!l_n && !l_t && !l_k && r_n && !r_t && !r_k) {
+        LOG_DBG(" MEJIRO -n => Enter");
+        raise_zmk_keycode_state_changed_from_encoded(ENTER, true, timestamp);
+        raise_zmk_keycode_state_changed_from_encoded(ENTER, false, timestamp);
+        return true;
+    }
+
+    // 2) "n-" : 左 n のみ → Space
+    if (l_n && !l_t && !l_k && !r_n && !r_t && !r_k) {
+        LOG_DBG(" MEJIRO n- => Space");
+        raise_zmk_keycode_state_changed_from_encoded(SPACE, true, timestamp);
+        raise_zmk_keycode_state_changed_from_encoded(SPACE, false, timestamp);
+        return true;
+    }
+
+    // 3) "n-n" : 左 n + 右 n → Space + Enter
+    if (l_n && !l_t && !l_k && r_n && !r_t && !r_k) {
+        LOG_DBG(" MEJIRO n-n => Space + Enter");
+        raise_zmk_keycode_state_changed_from_encoded(SPACE, true, timestamp);
+        raise_zmk_keycode_state_changed_from_encoded(SPACE, false, timestamp);
+        raise_zmk_keycode_state_changed_from_encoded(ENTER, true, timestamp);
+        raise_zmk_keycode_state_changed_from_encoded(ENTER, false, timestamp);
+        return true;
+    }
+
+    // 4) "-nt" : 右 n+t → "。"
+    if (!l_n && !l_t && !l_k && r_n && r_t && !r_k) {
+        LOG_DBG(" MEJIRO -nt => 。");
+        // すでに ngdickana に「。 + Space」のエントリがあるので、
+        // ここでは単純に DOT を送るだけにしておく（変換はユーザの運用次第）
+        raise_zmk_keycode_state_changed_from_encoded(DOT, true, timestamp);
+        raise_zmk_keycode_state_changed_from_encoded(DOT, false, timestamp);
+        return true;
+    }
+
+    // 5) "-nk" : 右 n+k → "、"
+    if (!l_n && !l_t && !l_k && r_n && !r_t && r_k) {
+        LOG_DBG(" MEJIRO -nk => 、");
+        raise_zmk_keycode_state_changed_from_encoded(COMMA, true, timestamp);
+        raise_zmk_keycode_state_changed_from_encoded(COMMA, false, timestamp);
+        return true;
+    }
+
+    // 6) "-ntk" : 右 n+t+k → "や" （= "ya"）
+    if (!l_n && !l_t && !l_k && r_n && r_t && r_k) {
+        LOG_DBG(" MEJIRO -ntk => や (ya)");
+        raise_zmk_keycode_state_changed_from_encoded(Y, true, timestamp);
+        raise_zmk_keycode_state_changed_from_encoded(Y, false, timestamp);
+        raise_zmk_keycode_state_changed_from_encoded(A, true, timestamp);
+        raise_zmk_keycode_state_changed_from_encoded(A, false, timestamp);
+        return true;
+    }
+
+    // 7) "n-nt" : 左 n + 右 n+t → "?"
+    if (l_n && !l_t && !l_k && r_n && r_t && !r_k) {
+        LOG_DBG(" MEJIRO n-nt => ?");
+        // ASCII ? を素直に送る（= SHIFT + SLASH 相当）
+        raise_zmk_keycode_state_changed_from_encoded(QUESTION, true, timestamp);
+        raise_zmk_keycode_state_changed_from_encoded(QUESTION, false, timestamp);
+        return true;
+    }
+
+    // 8) "n-nk" : 左 n + 右 n+k → "!"
+    if (l_n && !l_t && !l_k && r_n && !r_t && r_k) {
+        LOG_DBG(" MEJIRO n-nk => !");
+        raise_zmk_keycode_state_changed_from_encoded(EXCLAMATION, true, timestamp);
+        raise_zmk_keycode_state_changed_from_encoded(EXCLAMATION, false, timestamp);
+        return true;
+    }
+
+    // 9) "n-ntk" : 左 n + 右 n+t+k → "や、"
+    if (l_n && !l_t && !l_k && r_n && r_t && r_k) {
+        LOG_DBG(" MEJIRO n-ntk => や、");
+        raise_zmk_keycode_state_changed_from_encoded(Y, true, timestamp);
+        raise_zmk_keycode_state_changed_from_encoded(Y, false, timestamp);
+        raise_zmk_keycode_state_changed_from_encoded(A, true, timestamp);
+        raise_zmk_keycode_state_changed_from_encoded(A, false, timestamp);
+        raise_zmk_keycode_state_changed_from_encoded(COMMA, true, timestamp);
+        raise_zmk_keycode_state_changed_from_encoded(COMMA, false, timestamp);
+        return true;
+    }
+
+    // ここまでどれにも該当しなければ、Mejiro 例外ではない
+    return false;
+}
+
+
+
+
+
+
+
 // キー入力を文字に変換して出力する
 void ng_type(NGList *keys) {
     LOG_DBG(">NAGINATA NG_TYPE");
@@ -601,6 +782,20 @@ void ng_type(NGList *keys) {
         return;
     }
 
+
+    // ★ ここで「cvb / n m , だけ」のストロークなら
+    //    Mejiro ntk 例外ルールで出力して終わり
+    if (mej_is_pure_ntk_stroke(keys)) {
+        if (mej_handle_ntk_exception(keys)) {
+            LOG_DBG("<NAGINATA NG_TYPE (mejiro ntk exception)");
+            return;
+        }
+        // ここで false が返った場合は「ntk だけど、まだ定義してないパターン」
+        // 将来的に L_PARTICLE / R_PARTICLE の実装を足す余地を残す
+    }
+
+    // ↓ここから先は従来の薙刀式ロジックをそのまま維持
+    
     uint32_t keyset = 0UL;
     for (int i = 0; i < keys->size; i++) {
         keyset |= ng_key[keys->elements[i] - A];
