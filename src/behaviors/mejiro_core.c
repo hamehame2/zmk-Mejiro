@@ -10,6 +10,13 @@
  *   <your zmk module>/src/behaviors/mejiro_core.c
  */
 
+#include <zmk/event_manager.h>
+#include <zmk/events/keycode_state_changed.h>
+#include <zmk/behavior.h>
+
+
+
+
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <string.h>
@@ -374,6 +381,7 @@ static bool mej_joshi(const char *lp, const char *rp, char *out, size_t out_size
 // mejiro_core.c の weak 関数を上書き
 void mej_output_utf8(const char *s) {
     // ★ Mejiro が呼ばれたら必ず "q" を 1 回出す
+    int64_t timestamp = k_uptime_get();
     raise_zmk_keycode_state_changed_from_encoded(Q, true, timestamp);
     raise_zmk_keycode_state_changed_from_encoded(Q, false, timestamp);
 
