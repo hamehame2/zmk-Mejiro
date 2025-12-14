@@ -15,6 +15,7 @@
 #include <string.h>
 #include <stdbool.h>
 
+#include <zmk/behavior.h>   // ← Q, W, A... などのキーコード記号が入ってくる
 #include <zmk_naginata/nglist.h>
 #include <zmk_naginata/naginata_func.h> /* for A..Z, COMMA, etc */
 
