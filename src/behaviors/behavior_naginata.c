@@ -9,8 +9,6 @@
 #include <zephyr/device.h>
 #include <drivers/behavior.h>
 #include <zephyr/logging/log.h>
-#include <dt-bindings/zmk/keys.h>
-#include <zephyr/kernel.h>
 
 #include <zmk/event_manager.h>
 #include <zmk/events/keycode_state_changed.h>
@@ -20,6 +18,9 @@
 #include <zmk_naginata/nglistarray.h>
 
 #include <zmk_naginata/naginata_func.h>
+
+/* Mejiro core hook */
+extern bool mej_type_once(const NGList *keys);
 
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
@@ -33,20 +34,6 @@ struct naginata_config {
 static uint32_t pressed_keys = 0UL; // 押しているキーのビットをたてる
 static int8_t n_pressed_keys = 0;   // 押しているキーの数
 static int64_t timestamp;
-
-/* ==============================
- *  Mejiro core hook
- * ============================== */
-extern bool mej_type_once(const NGList *keys);
-
-/* ==============================
- *  DEBUG helpers (visible markers)
- * ============================== */
-#include <zephyr/sys/util.h>  // ARG_UNUSED が要る場合
-
-static inline void dbg_emit(uint32_t kc) {
-    ARG_UNUSED(kc);
-}
 static NGListArray nginput;
 extern bool ng_excluded;
 extern bool ng_enabled;
@@ -786,86 +773,19 @@ static bool mej_handle_ntk_exception(NGList *keys) {
 
 // キー入力を文字に変換して出力する
 void ng_type(NGList *keys) {
-    LOG_DBG(">NAGINATA NG_TYPE");
-
-    if (keys->size == 0)
-        return;
-
-
-    /* ===== DEBUG: reached ng_type() ===== */
-    dbg_emit(T);
-    LOG_INF("DBG ng_type size=%d", keys->size);
-
-    /* ===== DEBUG: call mej_type_once() ===== */
-    bool _mej_ret = mej_type_once(keys);
-    LOG_INF("DBG mej_type_once ret=%d", _mej_ret);
-    if (_mej_ret) {
-        dbg_emit(M);
-        return;
-    }
-    /* ===== DEBUG: falling back to Naginata ===== */
-    dbg_emit(N);
-
-    if (keys->size == 1 && keys->elements[0] == ENTER) {
-        LOG_DBG(" NAGINATA type keycode 0x%02X", ENTER);
-        raise_zmk_keycode_state_changed_from_encoded(ENTER, true, timestamp);
-        raise_zmk_keycode_state_changed_from_encoded(ENTER, false, timestamp);
+    if (!keys || keys->size == 0) {
         return;
     }
 
-
-    // ★ ここで「cvb / n m , だけ」のストロークなら
-    //    Mejiro ntk 例外ルールで出力して終わり
-    if (mej_is_pure_ntk_stroke(keys)) {
-        if (mej_handle_ntk_exception(keys)) {
-            LOG_DBG("<NAGINATA NG_TYPE (mejiro ntk exception)");
-            return;
-        }
-        // ここで false が返った場合は「ntk だけど、まだ定義してないパターン」
-        // 将来的に L_PARTICLE / R_PARTICLE の実装を足す余地を残す
+    /* Mejiro: handle if recognized. */
+    if (mej_type_once(keys)) {
+        return;
     }
 
-    // ↓ここから先は従来の薙刀式ロジックをそのまま維持
-    
-    uint32_t keyset = 0UL;
-    for (int i = 0; i < keys->size; i++) {
-        keyset |= ng_key[keys->elements[i] - A];
-    }
-
-    for (int i = 0; i < sizeof ngdickana / sizeof ngdickana[0]; i++) {
-        if ((ngdickana[i].shift | ngdickana[i].douji) == keyset) {
-            if (ngdickana[i].kana[0] != NONE) {
-                for (int k = 0; k < 6; k++) {
-                    if (ngdickana[i].kana[k] == NONE)
-                        break;
-                    LOG_DBG(" NAGINATA type keycode 0x%02X", ngdickana[i].kana[k]);
-                    raise_zmk_keycode_state_changed_from_encoded(ngdickana[i].kana[k], true,
-                                                                 timestamp);
-                    raise_zmk_keycode_state_changed_from_encoded(ngdickana[i].kana[k], false,
-                                                                 timestamp);
-                }
-            } else {
-                ngdickana[i].func();
-            }
-            LOG_DBG("<NAGINATA NG_TYPE");
-            return;
-        }
-    }
-
-    // JIみたいにJIを含む同時押しはたくさんあるが、JIのみの同時押しがないとき
-    // 最後の１キーを別に分けて変換する
-    NGList a, b;
-    initializeList(&a);
-    initializeList(&b);
-    for (int i = 0; i < keys->size - 1; i++) {
-        addToList(&a, keys->elements[i]);
-    }
-    addToList(&b, keys->elements[keys->size - 1]);
-    ng_type(&a);
-    ng_type(&b);
-
-    LOG_DBG("<NAGINATA NG_TYPE");
+    /* No Naginata fallback (user requested). */
+    return;
 }
+
 
 
 
@@ -1067,13 +987,3 @@ static const struct behavior_driver_api behavior_naginata_driver_api = {
                             CONFIG_KERNEL_INIT_PRIORITY_DEFAULT, &behavior_naginata_driver_api);
 
 DT_INST_FOREACH_STATUS_OKAY(KP_INST)
-
-
-
-///* ==============================
-// *  DEBUG: override Mejiro output hook
-// * ============================== */
-//void mej_output_utf8(const char *s) {
-//    dbg_emit(O);
-//    LOG_INF("DBG mej_output_utf8: %s", s);
-//}
