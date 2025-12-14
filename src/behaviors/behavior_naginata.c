@@ -29,6 +29,8 @@ static inline void clearListArray(NGListArray *a) {
 
 #include <zmk_naginata/naginata_func.h>
 
+
+#include "mejiro_core.h"
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
 struct naginata_config {
