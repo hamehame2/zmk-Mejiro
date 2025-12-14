@@ -11,14 +11,19 @@
 
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/init.h>
 
 #include <dt-bindings/zmk/keys.h>
 #include <zmk/events/keycode_state_changed.h>
 
-__attribute__((constructor))
-static void probe_mejiro_sender(void) {
-    mej_output_utf8("s");
+void mej_output_utf8(const char *s);
+static int probe_mejiro_sender_init(void)
+{
+    mej_output_utf8("s");   // ← 起動確認用。出なければ「送信経路」か「呼ばれてない」
+    return 0;
 }
+SYS_INIT(probe_mejiro_sender_init, APPLICATION, 90);
+
 
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
