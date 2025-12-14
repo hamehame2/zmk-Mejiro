@@ -15,6 +15,11 @@
 #include <dt-bindings/zmk/keys.h>
 #include <zmk/events/keycode_state_changed.h>
 
+__attribute__((constructor))
+static void probe_mejiro_sender(void) {
+    mej_output_utf8("s");
+}
+
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
 static inline void send_down_up(uint32_t kc) {
