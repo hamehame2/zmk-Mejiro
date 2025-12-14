@@ -7,7 +7,6 @@
 #define DT_DRV_COMPAT zmk_behavior_naginata
 
 #include <zephyr/device.h>
-#include <zephyr/kernel.h>
 #include <drivers/behavior.h>
 #include <zephyr/logging/log.h>
 
@@ -18,39 +17,19 @@
 #include <zmk_naginata/nglist.h>
 #include <zmk_naginata/nglistarray.h>
 
+
+/* --- Mejiro hook -------------------------------------------------------- */
+bool mejiro_try_emit_from_nginput(const NGListArray *nginput);
+static inline void clearListArray(NGListArray *a) {
+    while (a && a->size > 0) {
+        removeFromListArrayAt(a, 0);
+    }
+}
+/* ---------------------------------------------------------------------- */
+
 #include <zmk_naginata/naginata_func.h>
 
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
-
-/* ==== Mejiro debug hook (auto-inserted) =========================
- * When a chord is finalized (all keys released), we can tap a test key
- * to confirm the "output path" works, before any Naginata/Mejiro mapping.
- *
- * Set MEJIRO_Q_PROBE to 1 to always output 'q' on any finalized chord.
- * ================================================================= */
-#ifndef MEJIRO_Q_PROBE
-#define MEJIRO_Q_PROBE 0
-#endif
-
-static inline void mej_tap_key(uint32_t kc) {
-    int64_t ts = k_uptime_get();
-    raise_zmk_keycode_state_changed_from_encoded(kc, true, ts);
-    raise_zmk_keycode_state_changed_from_encoded(kc, false, ts + 1);
-}
-
-/* Optional hook: implement elsewhere if you want real Mejiro mapping.
- * Return true if you handled output and Naginata should skip its normal emit.
- */
-__attribute__((weak)) bool mejiro_try_emit_from_nginput(const NGListArray *nginput) {
-    ARG_UNUSED(nginput);
-    return false;
-}
-
-static inline void clearListArray(NGListArray *arr) {
-    while (arr->size > 0) {
-        removeFromListArrayAt(arr, 0);
-    }
-}
 
 struct naginata_config {
     bool tategaki;
@@ -989,17 +968,10 @@ bool naginata_release(struct zmk_behavior_binding *binding,
         pressed_keys &= ~ng_key[keycode - A]; // キーの重ね合わせ
 
         if (pressed_keys == 0UL) {
-            /* ---- Mejiro / debug output hook ---- */
-#if MEJIRO_Q_PROBE
-            mej_tap_key(Q); /* tap 'q' on any finalized chord */
-            clearListArray(&nginput);
-#else
+            /* Mejiro: if it handled this chord, skip ng_type() */
             if (mejiro_try_emit_from_nginput(&nginput)) {
-                clearListArray(&nginput); /* handled by Mejiro */
-            } else
-#endif
-            while (nginput.size > 0) {
-            while (nginput.size > 0) {
+                clearListArray(&nginput);
+            } else while (nginput.size > 0) {
                 ng_type(&(nginput.elements[0]));
                 removeFromListArrayAt(&nginput, 0);
             }
