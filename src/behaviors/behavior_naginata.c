@@ -909,6 +909,12 @@ bool naginata_release(struct zmk_behavior_binding *binding,
         pressed_keys &= ~ng_key[keycode - A]; // キーの重ね合わせ
 
         if (pressed_keys == 0UL) {
+            
+            // ★ここが「確定した瞬間」＝メジロの本処理を呼ぶ場所
+            if (mejiro_try_emit_from_nginput(&nginput)) {
+                clearListArray(&nginput);   // ← 既存の while を回さない
+                return true;
+            }
             while (nginput.size > 0) {
                 ng_type(&(nginput.elements[0]));
                 removeFromListArrayAt(&nginput, 0);
