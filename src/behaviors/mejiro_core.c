@@ -2,8 +2,8 @@
  * mejiro_core.c
  *
  * Mejiro core logic (stroke normalization + stroke_to_kana + joshi).
- * - Uses the same keycode symbols (A..Z, COMMA, DOT, SLASH, SEMI, etc.)
- *   as behavior_naginata.c already uses.
+ * - Uses ZMK keycode symbols (Q, W, A..Z, COMMA, DOT, SLASH, SEMI, etc.)
+ *   from <dt-bindings/zmk/keys.h>.
  * - Does NOT use QMK-style KC_*.
  *
  * You typically place this file next to behavior_naginata.c:
@@ -15,9 +15,9 @@
 #include <string.h>
 #include <stdbool.h>
 
-#include <zmk/behavior.h>   // ← Q, W, A... などのキーコード記号が入ってくる
+#include <dt-bindings/zmk/keys.h>
 #include <zmk_naginata/nglist.h>
-#include <zmk_naginata/naginata_func.h> /* for A..Z, COMMA, etc */
+#include <zmk_naginata/naginata_func.h> /* for nglist types (and any shared helpers) */
 
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
