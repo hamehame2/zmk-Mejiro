@@ -31,6 +31,21 @@ struct naginata_config {
 static uint32_t pressed_keys = 0UL; // 押しているキーのビットをたてる
 static int8_t n_pressed_keys = 0;   // 押しているキーの数
 static int64_t timestamp;
+
+/* ==============================
+ *  Mejiro core (separate file)
+ * ============================== */
+extern bool mej_type_once(const NGList *keys);
+
+/* Mejiro on/off.
+ * Use F20 to enable, F21 to disable, F22 to toggle (bind from keymap).
+ * When disabled, this behavior passes through key events as normal &kp.
+ */
+static bool mej_enabled = false;
+
+static inline void mej_passthrough(uint32_t keycode, bool pressed, int64_t ts) {
+    raise_zmk_keycode_state_changed_from_encoded(keycode, pressed, ts);
+}
 static NGListArray nginput;
 extern bool ng_excluded;
 extern bool ng_enabled;
@@ -775,6 +790,13 @@ void ng_type(NGList *keys) {
     if (keys->size == 0)
         return;
 
+    /* Mejiro core: if enabled and recognized, handle here (do not fall through to Naginata). */
+    if (mej_enabled) {
+        if (mej_type_once(keys)) {
+            return;
+        }
+    }
+
     if (keys->size == 1 && keys->elements[0] == ENTER) {
         LOG_DBG(" NAGINATA type keycode 0x%02X", ENTER);
         raise_zmk_keycode_state_changed_from_encoded(ENTER, true, timestamp);
@@ -993,6 +1015,19 @@ static int on_keymap_binding_pressed(struct zmk_behavior_binding *binding,
                                      struct zmk_behavior_binding_event event) {
     LOG_DBG("position %d keycode 0x%02X", event.position, binding->param1);
 
+    /* Mejiro enable/disable controls (bind these keycodes with &ng):
+     *   F20: enable, F21: disable, F22: toggle
+     */
+    if (binding->param1 == F20) { mej_enabled = true;  mej_passthrough(F20, true, event.timestamp); return ZMK_BEHAVIOR_OPAQUE; }
+    if (binding->param1 == F21) { mej_enabled = false; mej_passthrough(F21, true, event.timestamp); return ZMK_BEHAVIOR_OPAQUE; }
+    if (binding->param1 == F22) { mej_enabled = !mej_enabled; mej_passthrough(F22, true, event.timestamp); return ZMK_BEHAVIOR_OPAQUE; }
+
+    /* If Mejiro is disabled, behave like normal key press (passthrough). */
+    if (!mej_enabled) {
+        mej_passthrough(binding->param1, true, event.timestamp);
+        return ZMK_BEHAVIOR_OPAQUE;
+    }
+
     // F15が押されたらnaginata_config.os=NG_WINDOWS
     switch (binding->param1) {
         case F15:
@@ -1021,6 +1056,12 @@ static int on_keymap_binding_pressed(struct zmk_behavior_binding *binding,
 static int on_keymap_binding_released(struct zmk_behavior_binding *binding,
                                       struct zmk_behavior_binding_event event) {
     LOG_DBG("position %d keycode 0x%02X", event.position, binding->param1);
+
+    /* When disabled, behave like normal key release (passthrough). */
+    if (!mej_enabled) {
+        mej_passthrough(binding->param1, false, event.timestamp);
+        return ZMK_BEHAVIOR_OPAQUE;
+    }
 
     timestamp = event.timestamp;
     naginata_release(binding, event);
