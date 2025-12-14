@@ -7,6 +7,7 @@
 #define DT_DRV_COMPAT zmk_behavior_naginata
 
 #include <zephyr/device.h>
+#include <zephyr/kernel.h>
 #include <drivers/behavior.h>
 #include <zephyr/logging/log.h>
 
@@ -19,10 +20,37 @@
 
 #include <zmk_naginata/naginata_func.h>
 
-/* Mejiro core hook */
-extern bool mej_type_once(const NGList *keys);
-
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
+
+/* ==== Mejiro debug hook (auto-inserted) =========================
+ * When a chord is finalized (all keys released), we can tap a test key
+ * to confirm the "output path" works, before any Naginata/Mejiro mapping.
+ *
+ * Set MEJIRO_Q_PROBE to 1 to always output 'q' on any finalized chord.
+ * ================================================================= */
+#ifndef MEJIRO_Q_PROBE
+#define MEJIRO_Q_PROBE 0
+#endif
+
+static inline void mej_tap_key(uint32_t kc) {
+    int64_t ts = k_uptime_get();
+    raise_zmk_keycode_state_changed_from_encoded(kc, true, ts);
+    raise_zmk_keycode_state_changed_from_encoded(kc, false, ts + 1);
+}
+
+/* Optional hook: implement elsewhere if you want real Mejiro mapping.
+ * Return true if you handled output and Naginata should skip its normal emit.
+ */
+__attribute__((weak)) bool mejiro_try_emit_from_nginput(const NGListArray *nginput) {
+    ARG_UNUSED(nginput);
+    return false;
+}
+
+static inline void clearListArray(NGListArray *arr) {
+    while (arr->size > 0) {
+        removeFromListArrayAt(arr, 0);
+    }
+}
 
 struct naginata_config {
     bool tategaki;
@@ -773,19 +801,71 @@ static bool mej_handle_ntk_exception(NGList *keys) {
 
 // キー入力を文字に変換して出力する
 void ng_type(NGList *keys) {
-    if (!keys || keys->size == 0) {
+    LOG_DBG(">NAGINATA NG_TYPE");
+
+    if (keys->size == 0)
+        return;
+
+    if (keys->size == 1 && keys->elements[0] == ENTER) {
+        LOG_DBG(" NAGINATA type keycode 0x%02X", ENTER);
+        raise_zmk_keycode_state_changed_from_encoded(ENTER, true, timestamp);
+        raise_zmk_keycode_state_changed_from_encoded(ENTER, false, timestamp);
         return;
     }
 
-    /* Mejiro: handle if recognized. */
-    if (mej_type_once(keys)) {
-        return;
+
+    // ★ ここで「cvb / n m , だけ」のストロークなら
+    //    Mejiro ntk 例外ルールで出力して終わり
+    if (mej_is_pure_ntk_stroke(keys)) {
+        if (mej_handle_ntk_exception(keys)) {
+            LOG_DBG("<NAGINATA NG_TYPE (mejiro ntk exception)");
+            return;
+        }
+        // ここで false が返った場合は「ntk だけど、まだ定義してないパターン」
+        // 将来的に L_PARTICLE / R_PARTICLE の実装を足す余地を残す
     }
 
-    /* No Naginata fallback (user requested). */
-    return;
+    // ↓ここから先は従来の薙刀式ロジックをそのまま維持
+    
+    uint32_t keyset = 0UL;
+    for (int i = 0; i < keys->size; i++) {
+        keyset |= ng_key[keys->elements[i] - A];
+    }
+
+    for (int i = 0; i < sizeof ngdickana / sizeof ngdickana[0]; i++) {
+        if ((ngdickana[i].shift | ngdickana[i].douji) == keyset) {
+            if (ngdickana[i].kana[0] != NONE) {
+                for (int k = 0; k < 6; k++) {
+                    if (ngdickana[i].kana[k] == NONE)
+                        break;
+                    LOG_DBG(" NAGINATA type keycode 0x%02X", ngdickana[i].kana[k]);
+                    raise_zmk_keycode_state_changed_from_encoded(ngdickana[i].kana[k], true,
+                                                                 timestamp);
+                    raise_zmk_keycode_state_changed_from_encoded(ngdickana[i].kana[k], false,
+                                                                 timestamp);
+                }
+            } else {
+                ngdickana[i].func();
+            }
+            LOG_DBG("<NAGINATA NG_TYPE");
+            return;
+        }
+    }
+
+    // JIみたいにJIを含む同時押しはたくさんあるが、JIのみの同時押しがないとき
+    // 最後の１キーを別に分けて変換する
+    NGList a, b;
+    initializeList(&a);
+    initializeList(&b);
+    for (int i = 0; i < keys->size - 1; i++) {
+        addToList(&a, keys->elements[i]);
+    }
+    addToList(&b, keys->elements[keys->size - 1]);
+    ng_type(&a);
+    ng_type(&b);
+
+    LOG_DBG("<NAGINATA NG_TYPE");
 }
-
 
 
 
@@ -909,12 +989,16 @@ bool naginata_release(struct zmk_behavior_binding *binding,
         pressed_keys &= ~ng_key[keycode - A]; // キーの重ね合わせ
 
         if (pressed_keys == 0UL) {
-            
-            // ★ここが「確定した瞬間」＝メジロの本処理を呼ぶ場所
+            /* ---- Mejiro / debug output hook ---- */
+#if MEJIRO_Q_PROBE
+            mej_tap_key(Q); /* tap 'q' on any finalized chord */
+            clearListArray(&nginput);
+#else
             if (mejiro_try_emit_from_nginput(&nginput)) {
-                clearListArray(&nginput);   // ← 既存の while を回さない
-                return true;
-            }
+                clearListArray(&nginput); /* handled by Mejiro */
+            } else
+#endif
+            while (nginput.size > 0) {
             while (nginput.size > 0) {
                 ng_type(&(nginput.elements[0]));
                 removeFromListArrayAt(&nginput, 0);
