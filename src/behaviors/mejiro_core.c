@@ -375,7 +375,13 @@ void mej_output_utf8(const char *s) {
 bool mej_type_once(const NGList *keys) {
     mej_stroke_t st;
     mej_build_stroke_from_keys(keys, &st);
-    LOG_INF("MEJ stroke Lc=%s Lv=%s Lp=%s sep=%c Rc=%s Rv=%s Rp=%s star=%d", st.left_conso, st.left_vowel, st.left_particle, st.sep ? st.sep : '.', st.right_conso, st.right_vowel, st.right_particle, (int)st.star);
+
+    /* STRICT: ignore strokes that contain only separators/specials (no conso/vowel/particle). */
+    bool meaningful = (st.left_conso[0] || st.left_vowel[0] || st.left_particle[0] ||
+                      st.right_conso[0] || st.right_vowel[0] || st.right_particle[0]);
+    if (!meaningful) {
+        return false;
+    }
 
     mej_kana_t left = {0}, right = {0};
 
@@ -402,10 +408,8 @@ bool mej_type_once(const NGList *keys) {
     }
 
     if (out[0]) {
-        LOG_INF("MEJ out=%s", out);
         mej_output_utf8(out);
         return true;
     }
-    LOG_INF("MEJ out=<empty>");
     return false;
 }
