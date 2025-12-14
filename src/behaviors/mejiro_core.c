@@ -10,13 +10,6 @@
  *   <your zmk module>/src/behaviors/mejiro_core.c
  */
 
-#include <zmk/event_manager.h>
-#include <zmk/events/keycode_state_changed.h>
-#include <zmk/behavior.h>
-
-
-
-
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <string.h>
@@ -373,26 +366,16 @@ static bool mej_joshi(const char *lp, const char *rp, char *out, size_t out_size
 }
 
 /* Output hook: override in behavior_naginata.c if you want real key output */
-//__attribute__((weak))
-//void mej_output_utf8(const char *s) {
-//    LOG_DBG("Mejiro output: %s", s);
-//}
-
-// mejiro_core.c の weak 関数を上書き
+__attribute__((weak))
 void mej_output_utf8(const char *s) {
-    // ★ Mejiro が呼ばれたら必ず "q" を 1 回出す
-    int64_t timestamp = k_uptime_get();
-    raise_zmk_keycode_state_changed_from_encoded(Q, true, timestamp);
-    raise_zmk_keycode_state_changed_from_encoded(Q, false, timestamp);
-
-    LOG_INF("MEJIRO FIRED: %s", s);
+    LOG_DBG("Mejiro output: %s", s);
 }
-
 
 /* Public entry: process one stroke (NGList) */
 bool mej_type_once(const NGList *keys) {
     mej_stroke_t st;
     mej_build_stroke_from_keys(keys, &st);
+    LOG_INF("MEJ stroke Lc=%s Lv=%s Lp=%s sep=%c Rc=%s Rv=%s Rp=%s star=%d", st.left_conso, st.left_vowel, st.left_particle, st.sep ? st.sep : '.', st.right_conso, st.right_vowel, st.right_particle, (int)st.star);
 
     mej_kana_t left = {0}, right = {0};
 
@@ -419,8 +402,10 @@ bool mej_type_once(const NGList *keys) {
     }
 
     if (out[0]) {
+        LOG_INF("MEJ out=%s", out);
         mej_output_utf8(out);
         return true;
     }
+    LOG_INF("MEJ out=<empty>");
     return false;
 }
