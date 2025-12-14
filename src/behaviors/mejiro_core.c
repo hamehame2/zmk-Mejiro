@@ -366,10 +366,20 @@ static bool mej_joshi(const char *lp, const char *rp, char *out, size_t out_size
 }
 
 /* Output hook: override in behavior_naginata.c if you want real key output */
-__attribute__((weak))
+//__attribute__((weak))
+//void mej_output_utf8(const char *s) {
+//    LOG_DBG("Mejiro output: %s", s);
+//}
+
+// mejiro_core.c の weak 関数を上書き
 void mej_output_utf8(const char *s) {
-    LOG_DBG("Mejiro output: %s", s);
+    // ★ Mejiro が呼ばれたら必ず "q" を 1 回出す
+    raise_zmk_keycode_state_changed_from_encoded(Q, true, timestamp);
+    raise_zmk_keycode_state_changed_from_encoded(Q, false, timestamp);
+
+    LOG_INF("MEJIRO FIRED: %s", s);
 }
+
 
 /* Public entry: process one stroke (NGList) */
 bool mej_type_once(const NGList *keys) {
