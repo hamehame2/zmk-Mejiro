@@ -42,11 +42,11 @@ extern bool mej_type_once(const NGList *keys);
 /* ==============================
  *  DEBUG helpers (visible markers)
  * ============================== */
-static inline void dbg_emit(uint32_t kc) {
+/*static inline void dbg_emit(uint32_t kc) {
     int64_t ts = k_uptime_get();
     raise_zmk_keycode_state_changed_from_encoded(kc, true, ts);
     raise_zmk_keycode_state_changed_from_encoded(kc, false, ts);
-}
+}*/
 static NGListArray nginput;
 extern bool ng_excluded;
 extern bool ng_enabled;
