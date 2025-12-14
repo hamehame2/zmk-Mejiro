@@ -22,9 +22,9 @@
 
 static void send_encoded(uint32_t encoded) {
     /* press */
-    raise_zmk_keycode_state_changed_from_encoded(encoded, true, 0, k_uptime_get());
+    raise_zmk_keycode_state_changed_from_encoded(encoded, true, k_uptime_get());
     /* release */
-    raise_zmk_keycode_state_changed_from_encoded(encoded, false, 0, k_uptime_get());
+    raise_zmk_keycode_state_changed_from_encoded(encoded, false, k_uptime_get());
 }
 
 static uint32_t hid_for_ascii(char c, bool *need_shift) {
@@ -62,9 +62,9 @@ static void send_ascii_char(char c) {
 
     if (shift) {
         uint32_t lshift = ZMK_HID_USAGE(HID_USAGE_KEY, HID_USAGE_KEYBOARD_LEFT_SHIFT);
-        raise_zmk_keycode_state_changed_from_encoded(lshift, true, 0, k_uptime_get());
+        raise_zmk_keycode_state_changed_from_encoded(lshift, true, k_uptime_get());
         send_encoded(kc);
-        raise_zmk_keycode_state_changed_from_encoded(lshift, false, 0, k_uptime_get());
+        raise_zmk_keycode_state_changed_from_encoded(lshift, false, k_uptime_get());
     } else {
         send_encoded(kc);
     }
