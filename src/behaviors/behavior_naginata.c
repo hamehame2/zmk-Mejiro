@@ -18,19 +18,10 @@
 #include <zmk_naginata/nglistarray.h>
 
 
-/* --- Mejiro hook -------------------------------------------------------- */
-bool mejiro_try_emit_from_nginput(const NGListArray *nginput);
-static inline void clearListArray(NGListArray *a) {
-    while (a && a->size > 0) {
-        removeFromListArrayAt(a, 0);
-    }
-}
-/* ---------------------------------------------------------------------- */
-
 #include <zmk_naginata/naginata_func.h>
 
 
-#include "mejiro_core.h"
+#include <mejiro_core.h>
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
 struct naginata_config {
