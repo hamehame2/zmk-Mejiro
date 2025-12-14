@@ -1070,10 +1070,10 @@ DT_INST_FOREACH_STATUS_OKAY(KP_INST)
 
 
 
-/* ==============================
- *  DEBUG: override Mejiro output hook
- * ============================== */
-void mej_output_utf8(const char *s) {
-    dbg_emit(O);
-    LOG_INF("DBG mej_output_utf8: %s", s);
-}
+///* ==============================
+// *  DEBUG: override Mejiro output hook
+// * ============================== */
+//void mej_output_utf8(const char *s) {
+//    dbg_emit(O);
+//    LOG_INF("DBG mej_output_utf8: %s", s);
+//}
