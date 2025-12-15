@@ -856,9 +856,9 @@ void ng_type(NGList *keys) {
 
 // 薙刀式の入力処理
 bool naginata_press(struct zmk_behavior_binding *binding, struct zmk_behavior_binding_event event) {
+    LOG_DBG(">NAGINATA PRESS");
+    uint32_t keycode = binding->param1;
     LOG_INF("NG press kc=0x%08x (C=0x%08x COMMA=0x%08x SPACE=0x%08x ENTER=0x%08x)", keycode, C, COMMA, SPACE, ENTER);
-
-    //LOG_DBG(">NAGINATA PRESS");
 
     uint32_t keycode = binding->param1;
 
@@ -951,8 +951,9 @@ bool naginata_press(struct zmk_behavior_binding *binding, struct zmk_behavior_bi
 
 bool naginata_release(struct zmk_behavior_binding *binding,
                       struct zmk_behavior_binding_event event) {
-    LOG_INF("NG press kc=0x%08x (C=0x%08x COMMA=0x%08x SPACE=0x%08x ENTER=0x%08x)", keycode, C, COMMA, SPACE, ENTER);
-    //LOG_DBG(">NAGINATA RELEASE");
+    LOG_DBG(">NAGINATA RELEASE");
+    uint32_t keycode = binding->param1;
+    LOG_INF("NG rel   kc=0x%08x (C=0x%08x COMMA=0x%08x SPACE=0x%08x ENTER=0x%08x)", keycode, C, COMMA, SPACE, ENTER);
 
     uint32_t keycode = binding->param1;
 
