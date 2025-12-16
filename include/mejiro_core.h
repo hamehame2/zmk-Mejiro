@@ -1,6 +1,5 @@
 #pragma once
-#include <stdint.h>
 #include <stdbool.h>
-
-void mejiro_min_press(uint32_t kc);
-void mejiro_min_release(uint32_t kc);
+#include <stdint.h>
+#include <zmk_naginata/nglistarray.h>
+bool mejiro_try_emit_from_nginput(const NGListArray *nginput, int64_t timestamp);
