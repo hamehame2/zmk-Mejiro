@@ -24,6 +24,12 @@ extern int64_t timestamp;
 
 #define NONE 0
 
+static inline void clearListArray(NGListArray *a) {
+    while (a && a->size > 0) {
+        removeFromListArrayAt(a, 0);
+    }
+}
+
 // 薙刀式
 
 // 31キーを32bitの各ビットに割り当てる
