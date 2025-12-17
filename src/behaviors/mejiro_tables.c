@@ -17,7 +17,7 @@ const struct mejiro_kv mj_commands[] = {
     {"-TN", "{^/^}"},
     {"-TY", "{^)^}"},
     {"-YI", "{^(^}"},
-    {"tk#", "{PLOVER:TOGGLE}"},
+    //{"tk#", "{PLOVER:TOGGLE}"},
     {"#k", "{#F13}"},
     {"#t", "{#F14}"},
     {"-A", "{^}{#Left}{^}"},
@@ -28,7 +28,7 @@ const struct mejiro_kv mj_commands[] = {
     {"-T", "{^}{#End}{^}"},
     {"-U", "=undo"},
     {"-Y", "{^}{#Up}{^}"},
-    {"t#", "{PLOVER:SWITCH_SYSTEM:English Stenotype}{#F13}{^}"},
+    //{"t#", "{PLOVER:SWITCH_SYSTEM:English Stenotype}{#F13}{^}"},
     {"#", "=repeat_last_translation"}
 };
 const size_t mj_commands_len = sizeof(mj_commands) / sizeof(mj_commands[0]);
