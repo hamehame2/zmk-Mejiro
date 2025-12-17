@@ -17,6 +17,7 @@
 #include <zmk_naginata/nglist.h>
 #include <zmk_naginata/nglistarray.h>
 #include <zmk_naginata/naginata_func.h>
+#include "mejiro/mejiro_core.h"
 
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 extern int64_t timestamp;
