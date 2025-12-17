@@ -1,6 +1,6 @@
 #include "mejiro_tables.h"
 
-const struct mejiro_kv mj_commands[] = {
+const struct mj_kv mj_commands[] = {
     {"-SKNA", "{^\\{\\}^}{#Left}{^}"},
     {"-STYI", "{^<>^}{#Left}{^}"},
     {"-KNA", "{^[]^}{#Left}{^}"},
@@ -34,11 +34,11 @@ const struct mejiro_kv mj_commands[] = {
 const size_t mj_commands_len = sizeof(mj_commands) / sizeof(mj_commands[0]);
 
 /* Placeholders: keep linker happy even if core references them. */
-const struct mejiro_kv mj_users[] = { };
+const struct mj_kv mj_users[] = { };
 const size_t mj_users_len = 0;
 
-const struct mejiro_kv mj_abstract[] = { };
+const struct mj_kv mj_abstract[] = { };
 const size_t mj_abstract_len = 0;
 
-const struct mejiro_kv mj_verbs[] = { };
+const struct mj_kv mj_verbs[] = { };
 const size_t mj_verbs_len = 0;
