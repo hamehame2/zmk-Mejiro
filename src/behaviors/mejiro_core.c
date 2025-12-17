@@ -1,4 +1,4 @@
-#include "mejiro/mejiro_core.h"
+#include "mejiro_core.h"
 #include "mejiro/mejiro_tables.h"
 
 #include <string.h>
