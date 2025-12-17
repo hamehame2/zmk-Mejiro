@@ -1,5 +1,5 @@
 #include "mejiro_core.h"
-#include "mejiro/mejiro_tables.h"
+#include "mejiro_tables.h"
 
 #include <string.h>
 #include <ctype.h>
