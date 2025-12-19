@@ -1,0 +1,15 @@
+/*
+ * Copyright (c) 2020 The ZMK Contributors
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+/ {
+    behaviors {
+        /omit-if-no-ref/ mj: mejiro {
+            compatible = "zmk,behavior-mejiro";
+            label = "MEJIRO";
+            #binding-cells = <1>;   // ← ここが肝。引数で論理キーIDを渡せる
+        };
+    };
+};
