@@ -1,6 +1,21 @@
 #pragma once
 
+/* 最小：まずは数個だけでOK。増やすのはあとで。 */
+#define MJ_H   0
+#define MJ_NL  1
+#define MJ_NR  2
+#define MJ_TL  3
+#define MJ_TR  4
+#define MJ_KL  5
+#define MJ_KR  6
+
+
+/*
+#pragma once
+
+
 // 必須
+
 #define MJ_H   1
 #define MJ_X   2
 
@@ -27,3 +42,4 @@
 #define MJ_tR  101
 #define MJ_kL  110
 #define MJ_kR  111
+*/
