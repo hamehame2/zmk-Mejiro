@@ -7,6 +7,16 @@
 #include <drivers/behavior.h>
 #include <zmk/behavior.h>
 
+
+static int mejiro_pressed(struct zmk_behavior_binding *binding,
+                          struct zmk_behavior_binding_event event) {
+    return 0; // 何もしない
+}
+static int mejiro_released(struct zmk_behavior_binding *binding,
+                           struct zmk_behavior_binding_event event) {
+    return 0; // 何もしない
+}
+/*
 static int mejiro_pressed(struct zmk_behavior_binding *binding,
                           struct zmk_behavior_binding_event event) {
     ARG_UNUSED(event);
@@ -20,6 +30,7 @@ static int mejiro_released(struct zmk_behavior_binding *binding,
     printk("MEJIRO release: param=%d\n", binding->param1);
     return 0;
 }
+*/
 /*
 LOG_MODULE_REGISTER(behavior_mejiro, CONFIG_ZMK_LOG_LEVEL);
 
@@ -61,5 +72,6 @@ static int behavior_mejiro_init(const struct device *dev) {
 
 
 DT_INST_FOREACH_STATUS_OKAY(MEJIRO_INST)
+
 
 
