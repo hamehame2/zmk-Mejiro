@@ -15,7 +15,7 @@
 #include <zmk/endpoints.h>
 #include <zmk/keycode.h>
 
-
+/*
 static int mejiro_pressed(struct zmk_behavior_binding *binding,
                           struct zmk_behavior_binding_event event) {
     ARG_UNUSED(event);
@@ -24,7 +24,7 @@ static int mejiro_pressed(struct zmk_behavior_binding *binding,
     zmk_hid_keyboard_release(zmk_endpoints_selected(), ZMK_HID_USAGE(HID_USAGE_KEY, HID_USAGE_KEY_KEYBOARD_A));
     return 0;
 }
-/*
+*/
 LOG_MODULE_REGISTER(behavior_mejiro, CONFIG_ZMK_LOG_LEVEL);
 
 static int mejiro_pressed(struct zmk_behavior_binding *binding,
@@ -33,7 +33,7 @@ static int mejiro_pressed(struct zmk_behavior_binding *binding,
     LOG_INF("MEJIRO press: param=%d", binding->param1);
     return 0;
 }
-*/
+
 static int mejiro_released(struct zmk_behavior_binding *binding,
                            struct zmk_behavior_binding_event event) {
     ARG_UNUSED(event);
@@ -62,4 +62,5 @@ static int behavior_mejiro_init(const struct device *dev) {
                           &behavior_mejiro_driver_api);
 
 DT_INST_FOREACH_STATUS_OKAY(MEJIRO_INST)
+
 
