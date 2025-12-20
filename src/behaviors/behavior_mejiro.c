@@ -49,3 +49,4 @@ static int behavior_mejiro_init(const struct device *dev) {
                           &behavior_mejiro_driver_api);
 
 DT_INST_FOREACH_STATUS_OKAY(MEJIRO_INST)
+
