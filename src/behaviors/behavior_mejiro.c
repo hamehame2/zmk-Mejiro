@@ -7,7 +7,7 @@
 #include <zephyr/device.h>
 #include <zephyr/logging/log.h>
 
-#include <zephyr/drivers/behavior.h>
+#include <drivers/behavior.h>
 #include <zmk/behavior.h>
 
 LOG_MODULE_REGISTER(behavior_mejiro, CONFIG_ZMK_LOG_LEVEL);
@@ -27,7 +27,7 @@ static int mejiro_released(struct zmk_behavior_binding *binding,
 }
 
 static const struct behavior_driver_api behavior_mejiro_driver_api = {
-    .binding_pressed = mejiro_pressed,
+    .binding_pressed  = mejiro_pressed,
     .binding_released = mejiro_released,
 };
 
