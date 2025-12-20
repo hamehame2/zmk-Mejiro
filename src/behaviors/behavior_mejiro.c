@@ -1,30 +1,18 @@
 /*
- * Minimal Mejiro behavior: just logs param on press/release.
+ * Minimal Mejiro behavior (ZMK/Zephyr 4.x compatible):
+ * - Builds without <zephyr/drivers/behavior.h> and without <zmk/keycode.h>
+ * - Just logs param1 on press/release so you can confirm &mj is actually invoked.
  */
 
 #define DT_DRV_COMPAT zmk_behavior_mejiro
 
 #include <zephyr/device.h>
+#include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 
 #include <drivers/behavior.h>
 #include <zmk/behavior.h>
 
-
-#include <zmk/hid.h>
-#include <zmk/endpoints.h>
-#include <zmk/keycode.h>
-
-/*
-static int mejiro_pressed(struct zmk_behavior_binding *binding,
-                          struct zmk_behavior_binding_event event) {
-    ARG_UNUSED(event);
-    // とにかく A を1発送る（動いてるか確認用）
-    zmk_hid_keyboard_press(zmk_endpoints_selected(), ZMK_HID_USAGE(HID_USAGE_KEY, HID_USAGE_KEY_KEYBOARD_A));
-    zmk_hid_keyboard_release(zmk_endpoints_selected(), ZMK_HID_USAGE(HID_USAGE_KEY, HID_USAGE_KEY_KEYBOARD_A));
-    return 0;
-}
-*/
 LOG_MODULE_REGISTER(behavior_mejiro, CONFIG_ZMK_LOG_LEVEL);
 
 static int mejiro_pressed(struct zmk_behavior_binding *binding,
@@ -42,25 +30,24 @@ static int mejiro_released(struct zmk_behavior_binding *binding,
 }
 
 static const struct behavior_driver_api behavior_mejiro_driver_api = {
-    .binding_pressed  = mejiro_pressed,
+    .binding_pressed = mejiro_pressed,
     .binding_released = mejiro_released,
 };
 
 static int behavior_mejiro_init(const struct device *dev) {
     ARG_UNUSED(dev);
+    LOG_INF("MEJIRO init");
     return 0;
 }
 
-#define MEJIRO_INST(n)                                                                        \
-    DEVICE_DT_INST_DEFINE(n,                                                                  \
-                          behavior_mejiro_init,                                               \
-                          NULL,                                                               \
-                          NULL,                                                               \
-                          NULL,                                                               \
-                          POST_KERNEL,                                                        \
-                          CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,                                \
+#define MEJIRO_INST(n)                                                                       \
+    DEVICE_DT_INST_DEFINE(n,                                                                 \
+                          behavior_mejiro_init,                                              \
+                          NULL,                                                              \
+                          NULL,                                                              \
+                          NULL,                                                              \
+                          APPLICATION,                                                       \
+                          CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,                               \
                           &behavior_mejiro_driver_api);
 
 DT_INST_FOREACH_STATUS_OKAY(MEJIRO_INST)
-
-
