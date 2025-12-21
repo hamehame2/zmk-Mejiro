@@ -1,42 +1,43 @@
-/*
- * Minimal Mejiro behavior (ZMK / Zephyr 4.x)
- * Purpose: verify that &mj bindings are actually invoked.
- */
 #define DT_DRV_COMPAT zmk_behavior_mejiro
-//#error "MEJIRO_C_IS_COMPILING"
-#include <zmk/hid.h>
-#include <zmk/keycode.h>
-
 
 #include <zephyr/device.h>
-#include <zephyr/sys/printk.h>
+#include <zephyr/logging/log.h>
 
 #include <drivers/behavior.h>
 #include <zmk/behavior.h>
 
-static int mejiro_pressed(struct zmk_behavior_binding *binding,
-                          struct zmk_behavior_binding_event event) {
-    ARG_UNUSED(binding);
-    ARG_UNUSED(event);
+/* これが “&kp” の実体 */
+#include <zmk/behaviors/key_press.h>
 
-    zmk_hid_keyboard_press(ZMK_KEY_A);
-    zmk_hid_keyboard_release(ZMK_KEY_A);
-    zmk_hid_keyboard_clear();
-    return 0;
-}
-/*
+LOG_MODULE_REGISTER(behavior_mejiro, CONFIG_ZMK_LOG_LEVEL);
+
 static int mejiro_pressed(struct zmk_behavior_binding *binding,
-                          struct zmk_behavior_binding_event event) {
-    ARG_UNUSED(event);
-    printk("MJ press: p1=%d p2=%d\n", binding->param1, binding->param2);
-    return 0;
+                          struct zmk_behavior_binding_event event)
+{
+    ARG_UNUSED(binding);
+
+    /* “A” を押す（&kp A と同等） */
+    struct zmk_behavior_binding kp_a = {
+        .behavior_dev = DEVICE_DT_GET(DT_NODELABEL(kp)),
+        .param1 = ZMK_KEY_A,   /* ← ここがポイント */
+        .param2 = 0,
+    };
+
+    return zmk_behavior_invoke_binding(&kp_a, event, true);
 }
-*/
+
 static int mejiro_released(struct zmk_behavior_binding *binding,
-                           struct zmk_behavior_binding_event event) {
-    ARG_UNUSED(event);
-    printk("MJ release: p1=%d p2=%d\n", binding->param1, binding->param2);
-    return 0;
+                           struct zmk_behavior_binding_event event)
+{
+    ARG_UNUSED(binding);
+
+    struct zmk_behavior_binding kp_a = {
+        .behavior_dev = DEVICE_DT_GET(DT_NODELABEL(kp)),
+        .param1 = ZMK_KEY_A,
+        .param2 = 0,
+    };
+
+    return zmk_behavior_invoke_binding(&kp_a, event, false);
 }
 
 static const struct behavior_driver_api behavior_mejiro_driver_api = {
@@ -44,24 +45,20 @@ static const struct behavior_driver_api behavior_mejiro_driver_api = {
     .binding_released = mejiro_released,
 };
 
-static int behavior_mejiro_init(const struct device *dev) {
+static int behavior_mejiro_init(const struct device *dev)
+{
     ARG_UNUSED(dev);
-    printk("MJ init\n");
     return 0;
 }
 
-
-
-#define MEJIRO_INST(n)                                                     \
-    DEVICE_DT_INST_DEFINE(n,                                               \
-                          behavior_mejiro_init,                            \
-                          NULL,                                            \
-                          NULL,                                            \
-                          NULL,                                            \
-                          POST_KERNEL,                                     \
-                          CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,             \
+#define MEJIRO_INST(n)                                                    \
+    DEVICE_DT_INST_DEFINE(n,                                              \
+                          behavior_mejiro_init,                           \
+                          NULL,                                           \
+                          NULL,                                           \
+                          NULL,                                           \
+                          POST_KERNEL,                                    \
+                          CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,            \
                           &behavior_mejiro_driver_api);
 
 DT_INST_FOREACH_STATUS_OKAY(MEJIRO_INST)
-
-
