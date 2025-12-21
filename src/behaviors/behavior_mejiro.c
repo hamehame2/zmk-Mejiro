@@ -6,7 +6,6 @@
 #include <drivers/behavior.h>
 #include <zmk/behavior.h>
 
-/* これが “&kp” の実体 */
 #include <dt-bindings/zmk/keys.h>
 
 LOG_MODULE_REGISTER(behavior_mejiro, CONFIG_ZMK_LOG_LEVEL);
@@ -16,14 +15,15 @@ static int mejiro_pressed(struct zmk_behavior_binding *binding,
 {
     ARG_UNUSED(binding);
 
-    /* &kp と同じデバイスに投げる */
-    struct zmk_behavior_binding kp_a = {
-        .behavior_dev = DEVICE_DT_GET(DT_NODELABEL(kp)),
-        .param1 = ZMK_KEY_A,
+    /* ZMKのbindingは環境によって behavior_dev が "const char *" の場合がある。
+       ここでは "kp" を名前で指定して &kp と同じ動きを呼ぶ。 */
+    struct zmk_behavior_binding kp_esc = {
+        .behavior_dev = "kp",
+        .param1 = ESC,
         .param2 = 0,
     };
 
-    return zmk_behavior_invoke_binding(&kp_a, event, true);
+    return zmk_behavior_invoke_binding(&kp_esc, event, true);
 }
 
 static int mejiro_released(struct zmk_behavior_binding *binding,
@@ -31,13 +31,13 @@ static int mejiro_released(struct zmk_behavior_binding *binding,
 {
     ARG_UNUSED(binding);
 
-    struct zmk_behavior_binding kp_a = {
-        .behavior_dev = DEVICE_DT_GET(DT_NODELABEL(kp)),
-        .param1 = ZMK_KEY_A,
+    struct zmk_behavior_binding kp_esc = {
+        .behavior_dev = "kp",
+        .param1 = ESC,
         .param2 = 0,
     };
 
-    return zmk_behavior_invoke_binding(&kp_a, event, false);
+    return zmk_behavior_invoke_binding(&kp_esc, event, false);
 }
 
 static const struct behavior_driver_api behavior_mejiro_driver_api = {
