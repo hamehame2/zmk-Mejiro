@@ -7,7 +7,7 @@
 #include <zmk/behavior.h>
 
 /* これが “&kp” の実体 */
-#include <zmk/behaviors/key_press.h>
+#include <dt-bindings/zmk/keys.h>
 
 LOG_MODULE_REGISTER(behavior_mejiro, CONFIG_ZMK_LOG_LEVEL);
 
@@ -16,10 +16,10 @@ static int mejiro_pressed(struct zmk_behavior_binding *binding,
 {
     ARG_UNUSED(binding);
 
-    /* “A” を押す（&kp A と同等） */
+    /* &kp と同じデバイスに投げる */
     struct zmk_behavior_binding kp_a = {
         .behavior_dev = DEVICE_DT_GET(DT_NODELABEL(kp)),
-        .param1 = ZMK_KEY_A,   /* ← ここがポイント */
+        .param1 = ZMK_KEY_A,
         .param2 = 0,
     };
 
