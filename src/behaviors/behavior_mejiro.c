@@ -1,43 +1,64 @@
 #define DT_DRV_COMPAT zmk_behavior_mejiro
 
 #include <zephyr/device.h>
-#include <drivers/behavior.h>
 #include <zephyr/logging/log.h>
 
+#include <drivers/behavior.h>
 #include <zmk/behavior.h>
+
 #include <dt-bindings/zmk/keys.h>
 
-#include <dt-bindings/zmk/hid_usage.h>
-#include <zmk/hid.h>
-
-LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
-
-/* デバッグ用：押したら A を出す */
-static const struct zmk_behavior_binding kp_a = {
-    .behavior_dev = DEVICE_DT_NAME(DT_NODELABEL(kp)),
-    .param1 = ZMK_HID_USAGE(HID_USAGE_KEY, HID_USAGE_KEY_KEYBOARD_A),
-    .param2 = 0,
-};
+LOG_MODULE_REGISTER(behavior_mejiro, CONFIG_ZMK_LOG_LEVEL);
 
 static int mejiro_pressed(struct zmk_behavior_binding *binding,
-                          struct zmk_behavior_binding_event event) {
-    LOG_INF("&mj pressed pos=%d ts=%lld", event.position, event.timestamp);
-    return zmk_behavior_invoke_binding(&kp_a, event, true);
+                          struct zmk_behavior_binding_event event)
+{
+    ARG_UNUSED(binding);
+
+    /* ZMKのbindingは環境によって behavior_dev が "const char *" の場合がある。
+       ここでは "kp" を名前で指定して &kp と同じ動きを呼ぶ。 */
+    struct zmk_behavior_binding kp_esc = {
+        .behavior_dev = "kp",
+        .param1 = ESC,
+        .param2 = 0,
+    };
+
+    return zmk_behavior_invoke_binding(&kp_esc, event, true);
 }
 
 static int mejiro_released(struct zmk_behavior_binding *binding,
-                           struct zmk_behavior_binding_event event) {
-    LOG_INF("&mj released pos=%d ts=%lld", event.position, event.timestamp);
-    return zmk_behavior_invoke_binding(&kp_a, event, false);
+                           struct zmk_behavior_binding_event event)
+{
+    ARG_UNUSED(binding);
+
+    struct zmk_behavior_binding kp_esc = {
+        .behavior_dev = "kp",
+        .param1 = ESC,
+        .param2 = 0,
+    };
+
+    return zmk_behavior_invoke_binding(&kp_esc, event, false);
 }
 
 static const struct behavior_driver_api behavior_mejiro_driver_api = {
-    .binding_pressed = (behavior_keymap_binding_callback_t)mejiro_pressed,
-    .binding_released = (behavior_keymap_binding_callback_t)mejiro_released,
+    .binding_pressed = mejiro_pressed,
+    .binding_released = mejiro_released,
 };
 
-/* binding-cells は後述。ここは通常の定義 */
-BEHAVIOR_DT_INST_DEFINE(0, NULL, NULL, NULL, NULL,
-                        POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
-                        &behavior_mejiro_driver_api);
+static int behavior_mejiro_init(const struct device *dev)
+{
+    ARG_UNUSED(dev);
+    return 0;
+}
 
+#define MEJIRO_INST(n)                                                    \
+    DEVICE_DT_INST_DEFINE(n,                                              \
+                          behavior_mejiro_init,                           \
+                          NULL,                                           \
+                          NULL,                                           \
+                          NULL,                                           \
+                          POST_KERNEL,                                    \
+                          CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,            \
+                          &behavior_mejiro_driver_api);
+
+DT_INST_FOREACH_STATUS_OKAY(MEJIRO_INST)
