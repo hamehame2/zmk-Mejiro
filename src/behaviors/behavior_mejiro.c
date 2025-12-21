@@ -3,7 +3,10 @@
  * Purpose: verify that &mj bindings are actually invoked.
  */
 #define DT_DRV_COMPAT zmk_behavior_mejiro
-#error "MEJIRO_C_IS_COMPILING"
+//#error "MEJIRO_C_IS_COMPILING"
+#include <zmk/hid.h>
+#include <zmk/keycode.h>
+
 
 #include <zephyr/device.h>
 #include <zephyr/sys/printk.h>
@@ -13,11 +16,22 @@
 
 static int mejiro_pressed(struct zmk_behavior_binding *binding,
                           struct zmk_behavior_binding_event event) {
+    ARG_UNUSED(binding);
+    ARG_UNUSED(event);
+
+    zmk_hid_keyboard_press(ZMK_KEY_A);
+    zmk_hid_keyboard_release(ZMK_KEY_A);
+    zmk_hid_keyboard_clear();
+    return 0;
+}
+/*
+static int mejiro_pressed(struct zmk_behavior_binding *binding,
+                          struct zmk_behavior_binding_event event) {
     ARG_UNUSED(event);
     printk("MJ press: p1=%d p2=%d\n", binding->param1, binding->param2);
     return 0;
 }
-
+*/
 static int mejiro_released(struct zmk_behavior_binding *binding,
                            struct zmk_behavior_binding_event event) {
     ARG_UNUSED(event);
@@ -36,6 +50,8 @@ static int behavior_mejiro_init(const struct device *dev) {
     return 0;
 }
 
+
+
 #define MEJIRO_INST(n)                                                     \
     DEVICE_DT_INST_DEFINE(n,                                               \
                           behavior_mejiro_init,                            \
@@ -47,4 +63,5 @@ static int behavior_mejiro_init(const struct device *dev) {
                           &behavior_mejiro_driver_api);
 
 DT_INST_FOREACH_STATUS_OKAY(MEJIRO_INST)
+
 
