@@ -10,12 +10,16 @@
 
 #include <drivers/behavior.h>
 #include <zmk/behavior.h>
+#include <zephyr/sys/printk.h>
+
 
 LOG_MODULE_REGISTER(behavior_mejiro, CONFIG_ZMK_LOG_LEVEL);
 
 static int mejiro_pressed(struct zmk_behavior_binding *binding,
                           struct zmk_behavior_binding_event event)
 {
+    printk("MJ press p1=%d p2=%d\n", binding->param1, binding->param2);
+
     ARG_UNUSED(event);
     LOG_INF("MJ press: p1=%d p2=%d", binding->param1, binding->param2);
     return 0;
@@ -36,6 +40,8 @@ static const struct behavior_driver_api behavior_mejiro_driver_api = {
 
 static int behavior_mejiro_init(const struct device *dev)
 {
+    printk("MJ init\n");
+
     ARG_UNUSED(dev);
     return 0;
 }
@@ -56,3 +62,4 @@ static int behavior_mejiro_init(const struct device *dev)
                           &behavior_mejiro_driver_api);
 
 DT_INST_FOREACH_STATUS_OKAY(MEJIRO_INST)
+
