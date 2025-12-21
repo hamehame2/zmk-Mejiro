@@ -1,3 +1,10 @@
+description: Mejiro behavior (debug)
 compatible: "zmk,behavior-mejiro"
-include: [behavior.yaml]
-#binding-cells: 0
+
+properties:
+  "#binding-cells":
+    type: int
+    required: true
+    const: 0
+
+
