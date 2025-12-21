@@ -1,9 +1,9 @@
-
 / {
   behaviors {
-    mj: mj {
+    mj: behavior_mejiro {
       compatible = "zmk,behavior-mejiro";
-      #binding-cells = <0>;
+      #binding-cells = <1>;
+      status = "okay";
     };
   };
 };
