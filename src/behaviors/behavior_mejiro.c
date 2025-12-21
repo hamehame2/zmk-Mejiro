@@ -3,6 +3,7 @@
  * Purpose: verify that &mj bindings are actually invoked.
  */
 #define DT_DRV_COMPAT zmk_behavior_mejiro
+#error "MEJIRO_C_IS_COMPILING"
 
 #include <zephyr/device.h>
 #include <zephyr/sys/printk.h>
@@ -46,3 +47,4 @@ static int behavior_mejiro_init(const struct device *dev) {
                           &behavior_mejiro_driver_api);
 
 DT_INST_FOREACH_STATUS_OKAY(MEJIRO_INST)
+
