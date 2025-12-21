@@ -1,11 +1,3 @@
-description: Minimal Mejiro behavior (debug only)
-
 compatible: "zmk,behavior-mejiro"
-
-include: one_param.yaml
-
-properties:
-  label:
-    type: string
-    required: false
-    deprecated: true
+include: [behavior.yaml]
+#binding-cells: 0
