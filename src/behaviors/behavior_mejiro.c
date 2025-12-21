@@ -25,6 +25,9 @@ static const struct behavior_driver_api behavior_mejiro_driver_api = {
     .binding_released = mejiro_released,
 };
 
-BEHAVIOR_DT_INST_DEFINE(0, NULL, NULL, NULL, NULL,
-                        POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
-                        &behavior_mejiro_driver_api);
+/* ここがポイント：DTに存在するインスタンスだけ生成する */
+#define MEJIRO_INST(n)                                                                        \
+    BEHAVIOR_DT_INST_DEFINE(n, NULL, NULL, NULL, NULL, POST_KERNEL,                            \
+                            CONFIG_KERNEL_INIT_PRIORITY_DEFAULT, &behavior_mejiro_driver_api)
+
+DT_INST_FOREACH_STATUS_OKAY(MEJIRO_INST)
