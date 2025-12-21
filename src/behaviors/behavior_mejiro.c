@@ -7,12 +7,15 @@
 #include <zmk/behavior.h>
 #include <dt-bindings/zmk/keys.h>
 
+#include <dt-bindings/zmk/hid_usage.h>
+#include <zmk/hid.h>
+
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
 /* デバッグ用：押したら A を出す */
 static const struct zmk_behavior_binding kp_a = {
-    .behavior_dev = DEVICE_DT_NAME(DT_NODELABEL(kp)), /* ★ここが重要：NAME */
-    .param1 = ZMK_KEY_A,
+    .behavior_dev = DEVICE_DT_NAME(DT_NODELABEL(kp)),
+    .param1 = ZMK_HID_USAGE(HID_USAGE_KEY, HID_USAGE_KEY_KEYBOARD_A),
     .param2 = 0,
 };
 
@@ -37,3 +40,4 @@ static const struct behavior_driver_api behavior_mejiro_driver_api = {
 BEHAVIOR_DT_INST_DEFINE(0, NULL, NULL, NULL, NULL,
                         POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
                         &behavior_mejiro_driver_api);
+
