@@ -1,3 +1,4 @@
-config NAGINATA
-    bool "Enable Naginata"
+config ZMK_MEJIRO
+    bool "Enable Mejiro behavior module"
     default y
+    depends on !ZMK_SPLIT || ZMK_SPLIT_ROLE_CENTRAL
