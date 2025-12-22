@@ -7,7 +7,9 @@
 #define MJ_TL  3
 #define MJ_TR  4
 #define MJ_KL  5
-#define MJ_KR  6
+#define MJ_KR 6
+#define MJ_X  7
+
 
 
 /*
@@ -43,3 +45,4 @@
 #define MJ_kL  110
 #define MJ_kR  111
 */
+
