@@ -15,6 +15,7 @@ zephyr_library_sources_ifdef(CONFIG_ZMK_MEJIRO
   src/behaviors/behavior_mejiro.c
   src/behaviors/mejiro_tables.c
 
+  # （もし本当に必要なら。不要なら外してOK）
   src/behaviors/behavior_naginata.c
   src/naginata_func.c
   src/nglist.c
