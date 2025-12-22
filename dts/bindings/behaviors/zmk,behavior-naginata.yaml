@@ -1,9 +1,6 @@
-description: Minimal Mejiro behavior (debug only)
-
-compatible: "zmk,behavior-mejiro"
-
+description: Naginata behavior
+compatible: "zmk,behavior-naginata"
 include: one_param.yaml
-
 properties:
   label:
     type: string
