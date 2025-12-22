@@ -1,12 +1,14 @@
-if (CONFIG_NAGINATA)
-  target_sources(app PRIVATE src/behaviors/behavior_naginata.c)
-  target_sources(app PRIVATE src/behaviors/mejiro_core.c)
-  target_sources(app PRIVATE src/behaviors/mejiro_send_roman.c)
-  target_sources(app PRIVATE src/behaviors/behavior_mejiro.c)
-  target_sources(app PRIVATE src/naginata_func.c)
-  target_sources(app PRIVATE src/nglist.c)
-  target_sources(app PRIVATE src/nglistarray.c)
-  target_sources(app PRIVATE src/behaviors/mejiro_tables.c)  
-endif()
-
+zephyr_library()
 zephyr_include_directories(include)
+
+zephyr_library_sources_ifdef(CONFIG_ZMK_MEJIRO
+  src/behaviors/mejiro_core.c
+  src/behaviors/mejiro_send_roman.c
+  src/behaviors/behavior_mejiro.c
+  src/behaviors/mejiro_tables.c
+
+  src/behaviors/behavior_naginata.c
+  src/naginata_func.c
+  src/nglist.c
+  src/nglistarray.c
+)
