@@ -1,4 +1,4 @@
-if (CONFIG_NAGINATA AND ((NOT CONFIG_ZMK_SPLIT) OR CONFIG_ZMK_SPLIT_ROLE_CENTRAL))
+if (CONFIG_NAGINATA)
   target_sources(app PRIVATE src/behaviors/behavior_naginata.c)
   target_sources(app PRIVATE src/behaviors/mejiro_core.c)
   target_sources(app PRIVATE src/behaviors/mejiro_send_roman.c)
