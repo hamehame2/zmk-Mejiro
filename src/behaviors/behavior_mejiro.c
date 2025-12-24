@@ -16,7 +16,7 @@ static uint32_t mj_param_to_keycode(uint32_t p) {
     // まず「押された」ことを確実に見たいので、全部 F13 に潰す
     // （切り分けが終わったら、ここを H/T/K... に戻す）
     ARG_UNUSED(p);
-    return F13;
+    return F5;
 }
 
 static int on_press(struct zmk_behavior_binding *binding,
@@ -40,6 +40,17 @@ static const struct behavior_driver_api behavior_mejiro_driver_api = {
     .binding_released = on_release,
 };
 
-BEHAVIOR_DT_INST_DEFINE(0, NULL, NULL, NULL, NULL,
-                        POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
-                        &behavior_mejiro_driver_api);
+#define MEJIRO_INST(n) \
+    BEHAVIOR_DT_INST_DEFINE(n, NULL, NULL, NULL, NULL, POST_KERNEL, \
+                            CONFIG_KERNEL_INIT_PRIORITY_DEFAULT, \
+                            &behavior_mejiro_driver_api);
+
+DT_INST_FOREACH_STATUS_OKAY(MEJIRO_INST)
+
+
+
+static const struct behavior_driver_api behavior_mejiro_driver_api = {
+    .binding_pressed = on_press,
+    .binding_released = on_release,
+};
+
