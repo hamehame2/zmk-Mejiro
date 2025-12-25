@@ -24,16 +24,16 @@ LOG_MODULE_REGISTER(mejiro_send_roman, CONFIG_ZMK_LOG_LEVEL);
  * ここも「正攻法」で増やしていく前提。まずは tables の mj_commands にある最低限だけ。
  */
 
-static void tap(uint16_t keycode) {
-    zmk_hid_keyboard_press(zmk_endpoints_selected(), keycode);
-    zmk_hid_keyboard_release(zmk_endpoints_selected(), keycode);
+static void tap(zmk_key_t keycode) {
+    zmk_hid_keyboard_press(keycode);
+    zmk_hid_keyboard_release(keycode);
 }
 
-static void tap_with_mod(uint8_t mod, uint16_t keycode) {
-    zmk_hid_keyboard_press(zmk_endpoints_selected(), mod);
-    zmk_hid_keyboard_press(zmk_endpoints_selected(), keycode);
-    zmk_hid_keyboard_release(zmk_endpoints_selected(), keycode);
-    zmk_hid_keyboard_release(zmk_endpoints_selected(), mod);
+static void tap_with_mod(zmk_key_t mod_keycode, zmk_key_t keycode) {
+    zmk_hid_keyboard_press(mod_keycode);
+    zmk_hid_keyboard_press(keycode);
+    zmk_hid_keyboard_release(keycode);
+    zmk_hid_keyboard_release(mod_keycode);
 }
 
 static bool match_token(const char *s, const char *tok) {
