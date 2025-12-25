@@ -24,6 +24,8 @@ extern int64_t timestamp;
 
 #define NONE 0
 
+bool mejiro_try_emit_from_nginput(const NGListArray *nginput, int64_t timestamp);
+
 static inline void clearListArray(NGListArray *a) {
     while (a && a->size > 0) {
         removeFromListArrayAt(a, 0);
