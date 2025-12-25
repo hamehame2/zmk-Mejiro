@@ -11,7 +11,7 @@
 #include <zmk/hid.h>
 #include <dt-bindings/zmk/keys.h>
 
-
+#include <zephyr/dt-bindings/usb/hid.h>  // HID_KEY_* を使うなら
 LOG_MODULE_REGISTER(mejiro_send_roman, CONFIG_ZMK_LOG_LEVEL);
 
 /* Minimal executor:
@@ -24,16 +24,20 @@ LOG_MODULE_REGISTER(mejiro_send_roman, CONFIG_ZMK_LOG_LEVEL);
  * ここも「正攻法」で増やしていく前提。まずは tables の mj_commands にある最低限だけ。
  */
 
-static void tap(zmk_key_t keycode) {
-    zmk_hid_keyboard_press(keycode);
-    zmk_hid_keyboard_release(keycode);
+static void tap(uint16_t keycode) {
+    struct zmk_endpoint_instance ep = zmk_endpoints_selected();
+    zmk_hid_keyboard_press(&ep, keycode);
+    zmk_hid_keyboard_release(&ep, keycode);
 }
 
-static void tap_with_mod(zmk_key_t mod_keycode, zmk_key_t keycode) {
-    zmk_hid_keyboard_press(mod_keycode);
-    zmk_hid_keyboard_press(keycode);
-    zmk_hid_keyboard_release(keycode);
-    zmk_hid_keyboard_release(mod_keycode);
+static void tap_with_mod(uint16_t mod_keycode, uint16_t keycode) {
+    struct zmk_endpoint_instance ep = zmk_endpoints_selected();
+
+    zmk_hid_keyboard_press(&ep, mod_keycode);
+    zmk_hid_keyboard_press(&ep, keycode);
+
+    zmk_hid_keyboard_release(&ep, keycode);
+    zmk_hid_keyboard_release(&ep, mod_keycode);
 }
 
 static bool match_token(const char *s, const char *tok) {
@@ -43,47 +47,58 @@ static bool match_token(const char *s, const char *tok) {
 static bool exec_brace_hash(const char *token) {
     /* token is like "#BackSpace" */
     if (match_token(token, "#BackSpace")) {
-        tap(ZMK_KEY_BACKSPACE);
+        //tap(ZMK_KEY_BACKSPACE);
+        tap(HID_KEY_BACKSPACE);
         return true;
     }
     if (match_token(token, "#Delete")) {
-        tap(ZMK_KEY_DELETE);
+        //tap(ZMK_KEY_DELETE);
+        tap(HID_KEY_DELETE);
         return true;
     }
     if (match_token(token, "#Left")) {
-        tap(ZMK_KEY_LEFT);
+        //tap(ZMK_KEY_LEFT);
+        tap(HID_KEY_LEFT);        
         return true;
     }
     if (match_token(token, "#Right")) {
-        tap(ZMK_KEY_RIGHT);
+        //tap(ZMK_KEY_RIGHT);
+        tap(HID_KEY_RIGHT);
         return true;
     }
     if (match_token(token, "#Up")) {
-        tap(ZMK_KEY_UP);
+        //tap(ZMK_KEY_UP);
+        tap(HID_KEY_UP);
         return true;
     }
     if (match_token(token, "#Down")) {
-        tap(ZMK_KEY_DOWN);
+        //tap(ZMK_KEY_DOWN);
+        tap(HID_KEY_DOWN);
         return true;
     }
     if (match_token(token, "#Home")) {
-        tap(ZMK_KEY_HOME);
+        //tap(ZMK_KEY_HOME);
+        tap(HID_KEY_HOME);
         return true;
     }
     if (match_token(token, "#End")) {
-        tap(ZMK_KEY_END);
+        //tap(ZMK_KEY_END);
+        tap(HID_KEY_END);
         return true;
     }
     if (match_token(token, "#Escape")) {
-        tap(ZMK_KEY_ESCAPE);
+        //tap(ZMK_KEY_ESCAPE);
+        tap(HID_KEY_ESCAPE);
         return true;
     }
     if (match_token(token, "#F13")) {
-        tap(ZMK_KEY_F13);
+        //tap(ZMK_KEY_F13);
+        tap(HID_KEY_F13);
         return true;
     }
     if (match_token(token, "#F14")) {
-        tap(ZMK_KEY_F14);
+        //tap(ZMK_KEY_F14);
+        tap(HID_KEY_F14);
         return true;
     }
 
