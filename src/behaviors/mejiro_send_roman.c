@@ -1,15 +1,16 @@
 /* -------------------------------------------------------------------------
  * FILE: src/behaviors/mejiro_send_roman.c
  * ------------------------------------------------------------------------- */
+
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 
-#include <zmk/hid.h>
-#include <zmk/keycode.h>
-#include <zmk/behavior.h>
-#include <zmk/endpoints.h>
+#include <string.h>
 
-#include <mejiro/mejiro_send_roman.h>
+#include <zmk/endpoints.h>
+#include <zmk/hid.h>
+#include <dt-bindings/zmk/keys.h>
+
 
 LOG_MODULE_REGISTER(mejiro_send_roman, CONFIG_ZMK_LOG_LEVEL);
 
