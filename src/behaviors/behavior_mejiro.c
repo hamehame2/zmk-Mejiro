@@ -14,7 +14,7 @@
 #include <zmk/events/keycode_state_changed.h>
 #include <zmk/behavior.h>
 
-#include "mejiro_core.h"
+#include "mejiro/mejiro_core.h"
 
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
@@ -69,3 +69,4 @@ static const struct behavior_driver_api behavior_mejiro_driver_api = {
         &behavior_mejiro_driver_api)
 
 DT_INST_FOREACH_STATUS_OKAY(KP_INST)
+
