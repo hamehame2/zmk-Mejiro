@@ -1,7 +1,7 @@
 #pragma once
 
 #include <stddef.h> /* size_t */
-
+#include <stdbool.h>   // ← これを追加（位置は先頭付近）
 #ifdef __cplusplus
 extern "C" {
 #endif
