@@ -2,8 +2,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "mejiro_key_ids.h"
-
+#include "mejiro/mejiro_key_ids.h"
+#include <zmk/event_manager.h>   // zmk_event_t がここ（もしくは適切なヘッダ）
 /*
  * Core state: collects keys while pressed, emits when all are released.
  */
@@ -25,3 +25,4 @@ void mejiro_on_key_event(struct mejiro_state *st, enum mejiro_key_id id, bool pr
  * Returns true if something was emitted.
  */
 bool mejiro_try_emit(struct mejiro_state *st);
+int mejiro_on_binding_released(const zmk_event_t *event);
