@@ -1,6 +1,11 @@
 #include "mejiro_tables.h"
 
 const struct mj_kv mj_commands[] = {
+    { "TL", "{^{{^}" },     // 「{」を出したいなら literal
+    { "TR", "{^{\n^}" },    // 改行込みならこう
+    { "H",  "h" },          // まずはベタ打ちでOK
+    { "NL", "nl" },
+    { "KL", "kl" },
     {"-SKNA", "{^\\{\\}^}{#Left}{^}"},
     {"-STYI", "{^<>^}{#Left}{^}"},
     {"-KNA", "{^[]^}{#Left}{^}"},
