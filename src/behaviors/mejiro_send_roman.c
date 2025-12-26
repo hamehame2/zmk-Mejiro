@@ -413,6 +413,7 @@ void mejiro_tap_keycode(uint32_t keycode) {
 /* mejiro_core.c が呼ぶ名前に合わせるだけの薄いラッパ */
 void mejiro_send_roman_exec(const char *s) {
     mejiro_send_roman(s);
+    return 0;
 }
 
 /* -------------------------------------------------------------------------- */
