@@ -1,7 +1,8 @@
-#include "mejiro_send_roman.h"
+#include <mejiro/mejiro_send_roman.h>
 
-#include <zmk/hid.h>
-#include <zmk/keycode.h>
+#include <zephyr/logging/log.h>
+
+LOG_MODULE_REGISTER(mejiro_send_roman, CONFIG_ZMK_LOG_LEVEL);
 
 /*
  * Minimal stub:
@@ -9,8 +10,11 @@
  * For now, return false if roman is NULL/empty.
  */
 bool mejiro_send_roman(const char *roman) {
-    if (!roman || !roman[0]) return false;
+    if (!roman || !roman[0]) {
+        return false;
+    }
 
     /* TODO: implement actual key output (SEND_STRING equivalent for ZMK) */
+    LOG_DBG("mejiro_send_roman: '%s' (stub)", roman);
     return true;
 }
