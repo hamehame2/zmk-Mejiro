@@ -1,4 +1,14 @@
 #pragma once
+
+/*
+ * Public include for Mejiro.
+ * Put only stable interface here.
+ */
+
+#include "mejiro_key_ids.h"
+#include "mejiro_core.h"
+#include "mejiro_tables.h"
+#include "mejiro_send_roman.h"
 /*
  * dt-bindings for zmk,behavior-mejiro
  *
@@ -13,10 +23,7 @@
  * ID assignment keeps your previous numbers:
  *   MJ_L_n=8, MJ_L_t=9, MJ_L_k=10
  *   MJ_R_n=20, MJ_R_t=21, MJ_R_k=22
- */
 
-/* ---- Canonical numeric IDs (MUST be numbers for devicetree) ---- */
-/* Left hand */
 #define MJ_L_S   0
 #define MJ_L_T   1
 #define MJ_L_K   2
@@ -30,9 +37,9 @@
 #define MJ_L_t   9
 #define MJ_L_k   10
 
-#define MJ_H     11   /* '#' */
+#define MJ_H     11   
 
-/* Right hand */
+
 #define MJ_R_S   12
 #define MJ_R_T   13
 #define MJ_R_K   14
@@ -48,11 +55,10 @@
 
 #define MJ_X     23   /* '*' */
 
-/* ---- Optional helper macro for bitmask usage in C (not for DTS) ---- */
+
 #define MJ_BIT(id) (1u << (id))
 
-/* ---- User-friendly aliases (your request: allow &mj L_n etc.) ---- */
-/* Left uppercase */
+
 #define L_S MJ_L_S
 #define L_T MJ_L_T
 #define L_K MJ_L_K
@@ -61,12 +67,12 @@
 #define L_I MJ_L_I
 #define L_A MJ_L_A
 #define L_U MJ_L_U
-/* Left lowercase */
+
 #define L_n MJ_L_n
 #define L_t MJ_L_t
 #define L_k MJ_L_k
 
-/* Right uppercase */
+
 #define R_S MJ_R_S
 #define R_T MJ_R_T
 #define R_K MJ_R_K
@@ -75,15 +81,16 @@
 #define R_I MJ_R_I
 #define R_A MJ_R_A
 #define R_U MJ_R_U
-/* Right lowercase */
+
 #define R_n MJ_R_n
 #define R_t MJ_R_t
 #define R_k MJ_R_k
 
-/* Specials */
+
 #define H   MJ_H
 #define X   MJ_X
 
+*/
 /*
  * Backward-compat (ONLY if you really need it):
  *  - DO NOT do self-referential defines like: #define MJ_L_n MJ_L_n
@@ -92,3 +99,4 @@
  * Example (uncomment only if needed):
  *   #define MJ_L_SOME_OLD_NAME MJ_L_S
  */
+
