@@ -1,127 +1,130 @@
-/* -------------------------------------------------------------------------
- * FILE: src/behaviors/mejiro_core.c
- * ------------------------------------------------------------------------- */
+// src/behaviors/mejiro_core.c
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include <string.h>
+#include <stdint.h>
+#include <stdbool.h>
 
-#include <mejiro/mejiro_send_roman.h>
-
-/* tables */
+#include <mejiro/mejiro_core.h>
 #include <mejiro/mejiro_tables.h>
+#include <mejiro/mejiro_key_ids.h>
 
 LOG_MODULE_REGISTER(mejiro_core, CONFIG_ZMK_LOG_LEVEL);
 
-/* pressed now (currently held) */
-static uint32_t held_mask;
-/* keys that participated since last commit (union of presses) */
-static uint32_t chord_mask;
+/* -------------------------------------------------------------------------- */
+/* State                                                                      */
+/* -------------------------------------------------------------------------- */
 
-/* --- key->stroke mapping (暫定: 7key を Mejiro "S T N K" 系へ落とす) ---
- * 目的:
- *  1) 「全キー離した瞬間に1回だけ出す」骨格を固める
- *  2) tables(=mj_commands) に当たる文字列を生成できるようにする
- *
- * ここは後であなたの本命仕様に合わせて差し替える前提。
- * まずは実害が少ないよう、未知の組み合わせは何も出さない。
- *
- * 現状の生成規則:
- *  - 右手側のキーが1つでも入っていたら先頭に '-' を付ける（tables の "-SKNA" 形式に合わせる）
- *  - H:  S
- *  - T:  TL/TR -> T
- *  - N:  NL/NR -> N
- *  - K:  KL/KR -> K
- *
- * 例:
- *  - H + KL + NL + TR + NR  -> "-SKNT"
- *    ※並び順は S K N T の固定。必要なら変更。
- */
-static bool build_stroke_from_mask(uint32_t m, char *out, size_t out_sz) {
-    if (!out || out_sz < 2) {
-        return false;
-    }
+static uint32_t held_mask;   /* keys currently held */
+static uint32_t chord_mask;  /* keys that participated in this chord */
 
-    /* key ids are 0..6 */
-    const bool has_h  = (m & (1u << 0)) != 0; /* MJ_H  */
-    const bool has_tl = (m & (1u << 1)) != 0; /* MJ_TL */
-    const bool has_nl = (m & (1u << 2)) != 0; /* MJ_NL */
-    const bool has_tr = (m & (1u << 3)) != 0; /* MJ_TR */
-    const bool has_nr = (m & (1u << 4)) != 0; /* MJ_NR */
-    const bool has_kl = (m & (1u << 5)) != 0; /* MJ_KL */
-    const bool has_kr = (m & (1u << 6)) != 0; /* MJ_KR */
+/* -------------------------------------------------------------------------- */
+/* Table lookup helpers                                                        */
+/* -------------------------------------------------------------------------- */
 
-    const bool right = has_tr || has_nr || has_kr;
-
-    /* If nothing meaningful -> no stroke */
-    if (!(has_h || has_tl || has_nl || has_tr || has_nr || has_kl || has_kr)) {
-        out[0] = '\0';
-        return false;
-    }
-
-    size_t p = 0;
-
-    if (right) {
-        if (p + 1 >= out_sz) return false;
-        out[p++] = '-';
-    }
-
-    /* fixed order to match existing tables examples (-SKNA etc).
-     * (暫定) S K N T の順。必要なら後であなたの期待通りに変更。
-     */
-    if (has_h) {
-        if (p + 1 >= out_sz) return false;
-        out[p++] = 'S';
-    }
-
-    if (has_kl || has_kr) {
-        if (p + 1 >= out_sz) return false;
-        out[p++] = 'K';
-    }
-
-    if (has_nl || has_nr) {
-        if (p + 1 >= out_sz) return false;
-        out[p++] = 'N';
-    }
-
-    if (has_tl || has_tr) {
-        if (p + 1 >= out_sz) return false;
-        out[p++] = 'T';
-    }
-
-    out[p] = '\0';
-    return p > 0;
-}
-
-static const struct mj_kv *find_kv(const struct mj_kv *arr, size_t n, const char *key) {
-    if (!arr || !key) return NULL;
-    for (size_t i = 0; i < n; i++) {
-        if (arr[i].k && arr[i].v && (strcmp(arr[i].k, key) == 0)) {
-            return &arr[i];
+static const struct mj_kv *find_kv(const struct mj_kv *tbl, size_t len, const char *k) {
+    for (size_t i = 0; i < len; i++) {
+        if (tbl[i].k && !strcmp(tbl[i].k, k)) {
+            return &tbl[i];
         }
     }
     return NULL;
 }
 
+/* -------------------------------------------------------------------------- */
+/* Stroke normalization: [STKNYIAUntk#STKNYIAUntk*]                            */
+/*   - Left letters in fixed order                                             */
+/*   - Optional '#' appended after left letters                                */
+/*   - If any right letters: add '-' then right letters in fixed order         */
+/*   - Optional '*' appended at end                                            */
+/* -------------------------------------------------------------------------- */
+
+static const struct {
+    uint8_t id;
+    char ch;
+} left_order[] = {
+    {MJ_L_S, 'S'}, {MJ_L_T, 'T'}, {MJ_L_K, 'K'}, {MJ_L_N, 'N'},
+    {MJ_L_Y, 'Y'}, {MJ_L_I, 'I'}, {MJ_L_A, 'A'}, {MJ_L_U, 'U'},
+    {MJ_L_n, 'n'}, {MJ_L_t, 't'}, {MJ_L_k, 'k'},
+};
+
+static const struct {
+    uint8_t id;
+    char ch;
+} right_order[] = {
+    {MJ_R_S, 'S'}, {MJ_R_T, 'T'}, {MJ_R_K, 'K'}, {MJ_R_N, 'N'},
+    {MJ_R_Y, 'Y'}, {MJ_R_I, 'I'}, {MJ_R_A, 'A'}, {MJ_R_U, 'U'},
+    {MJ_R_n, 'n'}, {MJ_R_t, 't'}, {MJ_R_k, 'k'},
+};
+
+static bool build_stroke_from_mask(uint32_t mask, char *out, size_t out_sz) {
+    if (!out || out_sz == 0) return false;
+    out[0] = '\0';
+
+    size_t w = 0;
+
+    /* Left side */
+    for (size_t i = 0; i < sizeof(left_order)/sizeof(left_order[0]); i++) {
+        uint32_t bit = 1u << left_order[i].id;
+        if (mask & bit) {
+            if (w + 1 >= out_sz) return false;
+            out[w++] = left_order[i].ch;
+        }
+    }
+
+    /* '#' (H key) */
+    if (mask & (1u << MJ_HASH)) {
+        if (w + 1 >= out_sz) return false;
+        out[w++] = '#';
+    }
+
+    /* Right side present? */
+    bool any_right = false;
+    for (size_t i = 0; i < sizeof(right_order)/sizeof(right_order[0]); i++) {
+        if (mask & (1u << right_order[i].id)) {
+            any_right = true;
+            break;
+        }
+    }
+
+    if (any_right) {
+        if (w + 1 >= out_sz) return false;
+        out[w++] = '-';
+
+        for (size_t i = 0; i < sizeof(right_order)/sizeof(right_order[0]); i++) {
+            uint32_t bit = 1u << right_order[i].id;
+            if (mask & bit) {
+                if (w + 1 >= out_sz) return false;
+                out[w++] = right_order[i].ch;
+            }
+        }
+    }
+
+    /* '*' (X key) at end */
+    if (mask & (1u << MJ_STAR)) {
+        if (w + 1 >= out_sz) return false;
+        out[w++] = '*';
+    }
+
+    out[w] = '\0';
+    return (w > 0);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Commit                                                                      */
+/* -------------------------------------------------------------------------- */
+
 static void commit_if_ready(void) {
-    if (held_mask != 0) {
-        return; /* still holding something */
-    }
+    if (held_mask != 0) return;     /* still holding */
+    if (chord_mask == 0) return;
 
-    if (chord_mask == 0) {
-        return;
-    }
-
-    char stroke[32];
+    char stroke[48];
     const bool ok = build_stroke_from_mask(chord_mask, stroke, sizeof(stroke));
-
     LOG_DBG("commit: mask=0x%08x stroke='%s'", chord_mask, ok ? stroke : "<none>");
 
     chord_mask = 0;
+    if (!ok || stroke[0] == '\0') return;
 
-    if (!ok || stroke[0] == '\0') {
-        return;
-    }
-
-    /* Lookup order: users -> abstract -> verbs -> commands (今は commands だけ実体あり) */
     const struct mj_kv *kv = NULL;
     kv = find_kv(mj_users, mj_users_len, stroke);
     if (!kv) kv = find_kv(mj_abstract, mj_abstract_len, stroke);
@@ -136,21 +139,24 @@ static void commit_if_ready(void) {
     (void)mejiro_send_roman_exec(kv->v);
 }
 
+/* -------------------------------------------------------------------------- */
+/* Public API                                                                  */
+/* -------------------------------------------------------------------------- */
+
 void mejiro_core_on_press(uint8_t key_id) {
-    if (key_id >= 32) {
-        return;
-    }
-    const uint32_t bit = 1u << key_id;
+    if (key_id >= MJ_KEY_ID_MAX) return;
+
+    uint32_t bit = 1u << key_id;
     held_mask |= bit;
     chord_mask |= bit;
 }
 
 void mejiro_core_on_release(uint8_t key_id) {
-    if (key_id >= 32) {
-        return;
-    }
-    const uint32_t bit = 1u << key_id;
+    if (key_id >= MJ_KEY_ID_MAX) return;
+
+    uint32_t bit = 1u << key_id;
     held_mask &= ~bit;
+
     commit_if_ready();
 }
 
