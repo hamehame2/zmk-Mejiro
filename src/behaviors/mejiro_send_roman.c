@@ -30,7 +30,7 @@
 
 #include <zmk_naginata/nglistarray.h>
 #include <zephyr/sys/util.h>   /* ARG_UNUSED */
-
+#include <mejiro/mejiro_send_roman.h>
 
 
 LOG_MODULE_REGISTER(mejiro_send_roman, CONFIG_ZMK_LOG_LEVEL);
@@ -426,3 +426,10 @@ bool mejiro_try_emit_from_nginput(const NGListArray *nginput) {
     return false;
 }
 
+/* existing: void mejiro_send_roman(const char *s); */
+
+bool mejiro_send_roman_exec(const char *cmd) {
+    if (!cmd || !*cmd) return false;
+    mejiro_send_roman(cmd);
+    return true;
+}
