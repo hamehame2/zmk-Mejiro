@@ -1,364 +1,325 @@
 /*
- * Mejiro: send roman / raw key tapping helper
+ * mejiro_send_roman.c
  *
- * Goal:
- *  - Convert output strings (roman) into HID keyboard key taps on the device side.
- *  - Avoid including Zephyr USB HID dt-bindings header (not present in this build).
- *  - Work with ZMK endpoints API: zmk_endpoints_selected() returns a struct value
- *    in your environment, so we store it and pass &ep to HID functions.
+ * Minimal "send string / key sequence" layer for Mejiro.
+ * - DOES NOT include zmk/hid_keyboard.h (ZMK 4.1+ で死にやすい)
+ * - Sends keys by raising keycode_state_changed events
  *
- * Notes:
- *  - This file intentionally does NOT include <zephyr/dt-bindings/usb/hid.h>.
- *  - We only rely on ZMK headers.
+ * Supported mini-syntax (subset inspired by Plover):
+ *   - Plain text: "abc", "Hello"
+ *   - {#Left} {#Right} {#Up} {#Down} {#Home} {#End}
+ *   - {#BackSpace} {#Delete} {#Enter} {#Tab} {#Escape}
+ *   - {#F1}..{#F24}
+ *   - {^literal^}  -> send literal string inside
+ *   - "=undo"      -> send Ctrl+Z
+ *
+ * Anything unknown is treated as plain text (best-effort).
  */
 
 #include <zephyr/kernel.h>
-#include <zephyr/sys/util.h>
+#include <zephyr/logging/log.h>
 
-#include <zmk/endpoints.h>
-#include <zmk/hid.h>
-#include <zmk/hid_keyboard.h>
+#include <zmk/events/keycode_state_changed.h>
+#include <zmk/event_manager.h>
 
-#include "mejiro_send_roman.h"
+#include <dt-bindings/zmk/keys.h>
+
+LOG_MODULE_REGISTER(mejiro_send_roman, CONFIG_ZMK_LOG_LEVEL);
 
 /* -------------------------------------------------------------------------- */
-/* Timing (tiny gaps help some hosts and keep ordering stable)                 */
+/* Key event helpers                                                          */
 /* -------------------------------------------------------------------------- */
 
-#ifndef MJ_TAP_DELAY_MS
-#define MJ_TAP_DELAY_MS 1
-#endif
-
-#ifndef MJ_SEQ_DELAY_MS
-#define MJ_SEQ_DELAY_MS 0
-#endif
-
-static inline void mj_sleep_ms(int ms) {
-    if (ms > 0) {
-        k_sleep(K_MSEC(ms));
-    }
+static inline int64_t now_ms(void) {
+    /* uptime in ms is fine for event timestamps */
+    return (int64_t)k_uptime_get();
 }
-
-/* -------------------------------------------------------------------------- */
-/* Keycode encoding helpers                                                    */
-/* -------------------------------------------------------------------------- */
 
 /*
- * ZMK keycodes:
- *  - For "normal" keys we use ZMK_HID_USAGE(HID_USAGE_KEY, <usage_id>).
- *  - For modifiers we use zmk_hid_keyboard_press/release_modifiers().
- *
- * If your ZMK version uses different helper names for modifiers,
- * this is the single place you’ll edit.
+ * Raise a "keycode changed" event with encoded keycode.
+ * This relies on ZMK's normal pipeline to deliver HID/USB/BLE output.
  */
+static void send_keycode_event(uint32_t keycode, bool pressed) {
+    int64_t ts = now_ms();
+    /* In ZMK 4.x the helper is typically available. If your tree uses a different
+     * name, this is the only place you need to adjust. */
+    raise_zmk_keycode_state_changed_from_encoded(keycode, pressed, ts);
+}
 
-/* Common HID usage IDs for keyboard (USB HID Usage Tables) */
-enum {
-    HID_KBD_A = 0x04,
-    HID_KBD_B = 0x05,
-    HID_KBD_C = 0x06,
-    HID_KBD_D = 0x07,
-    HID_KBD_E = 0x08,
-    HID_KBD_F = 0x09,
-    HID_KBD_G = 0x0A,
-    HID_KBD_H = 0x0B,
-    HID_KBD_I = 0x0C,
-    HID_KBD_J = 0x0D,
-    HID_KBD_K = 0x0E,
-    HID_KBD_L = 0x0F,
-    HID_KBD_M = 0x10,
-    HID_KBD_N = 0x11,
-    HID_KBD_O = 0x12,
-    HID_KBD_P = 0x13,
-    HID_KBD_Q = 0x14,
-    HID_KBD_R = 0x15,
-    HID_KBD_S = 0x16,
-    HID_KBD_T = 0x17,
-    HID_KBD_U = 0x18,
-    HID_KBD_V = 0x19,
-    HID_KBD_W = 0x1A,
-    HID_KBD_X = 0x1B,
-    HID_KBD_Y = 0x1C,
-    HID_KBD_Z = 0x1D,
+static void tap_key(uint32_t keycode) {
+    send_keycode_event(keycode, true);
+    /* Tiny delay helps some hosts; keep small to avoid lag */
+    k_busy_wait(800); /* 0.8ms */
+    send_keycode_event(keycode, false);
+}
 
-    HID_KBD_1 = 0x1E,
-    HID_KBD_2 = 0x1F,
-    HID_KBD_3 = 0x20,
-    HID_KBD_4 = 0x21,
-    HID_KBD_5 = 0x22,
-    HID_KBD_6 = 0x23,
-    HID_KBD_7 = 0x24,
-    HID_KBD_8 = 0x25,
-    HID_KBD_9 = 0x26,
-    HID_KBD_0 = 0x27,
+/* Modifier press/release (use the standard keycodes) */
+static void press_mod(uint32_t mod_keycode) {
+    send_keycode_event(mod_keycode, true);
+}
+static void release_mod(uint32_t mod_keycode) {
+    send_keycode_event(mod_keycode, false);
+}
 
-    HID_KBD_ENTER      = 0x28,
-    HID_KBD_ESCAPE     = 0x29,
-    HID_KBD_BACKSPACE  = 0x2A,
-    HID_KBD_TAB        = 0x2B,
-    HID_KBD_SPACE      = 0x2C,
-
-    HID_KBD_MINUS      = 0x2D, /* - _ */
-    HID_KBD_EQUAL      = 0x2E, /* = + */
-    HID_KBD_LBRACKET   = 0x2F, /* [ { */
-    HID_KBD_RBRACKET   = 0x30, /* ] } */
-    HID_KBD_BSLASH     = 0x31, /* \ | */
-    HID_KBD_SEMICOLON  = 0x33, /* ; : */
-    HID_KBD_APOSTROPHE = 0x34, /* ' " */
-    HID_KBD_GRAVE      = 0x35, /* ` ~ */
-    HID_KBD_COMMA      = 0x36, /* , < */
-    HID_KBD_DOT        = 0x37, /* . > */
-    HID_KBD_SLASH      = 0x38, /* / ? */
-
-    HID_KBD_CAPSLOCK   = 0x39,
-
-    HID_KBD_F1         = 0x3A,
-    HID_KBD_F2         = 0x3B,
-    HID_KBD_F3         = 0x3C,
-    HID_KBD_F4         = 0x3D,
-    HID_KBD_F5         = 0x3E,
-    HID_KBD_F6         = 0x3F,
-    HID_KBD_F7         = 0x40,
-    HID_KBD_F8         = 0x41,
-    HID_KBD_F9         = 0x42,
-    HID_KBD_F10        = 0x43,
-    HID_KBD_F11        = 0x44,
-    HID_KBD_F12        = 0x45,
-
-    HID_KBD_RIGHT      = 0x4F,
-    HID_KBD_LEFT       = 0x50,
-    HID_KBD_DOWN       = 0x51,
-    HID_KBD_UP         = 0x52,
-
-    HID_KBD_HOME       = 0x4A,
-    HID_KBD_END        = 0x4D,
-    HID_KBD_DELETE     = 0x4C,
-};
-
-/* ZMK modifier bits (left shift etc) */
-#ifndef MOD_LSFT
-#define MOD_LSFT ZMK_HID_KEYBOARD_MODIFIER_LEFT_SHIFT
-#endif
-#ifndef MOD_LCTL
-#define MOD_LCTL ZMK_HID_KEYBOARD_MODIFIER_LEFT_CTRL
-#endif
-#ifndef MOD_LALT
-#define MOD_LALT ZMK_HID_KEYBOARD_MODIFIER_LEFT_ALT
-#endif
-#ifndef MOD_LGUI
-#define MOD_LGUI ZMK_HID_KEYBOARD_MODIFIER_LEFT_GUI
-#endif
-
-static inline uint32_t mj_key_usage(uint8_t usage_id) {
-    return ZMK_HID_USAGE(HID_USAGE_KEY, usage_id);
+static void tap_with_mod(uint32_t mod_keycode, uint32_t keycode) {
+    press_mod(mod_keycode);
+    k_busy_wait(300);
+    tap_key(keycode);
+    k_busy_wait(300);
+    release_mod(mod_keycode);
 }
 
 /* -------------------------------------------------------------------------- */
-/* Low-level tapping                                                           */
+/* ASCII -> keycode mapping (US layout assumption)                             */
 /* -------------------------------------------------------------------------- */
 
-static void mj_press_mods(uint8_t mods) {
-    if (mods == 0) {
-        return;
-    }
-    struct zmk_endpoint_instance ep = zmk_endpoints_selected();
-    (void)zmk_hid_keyboard_press_modifiers(&ep, mods);
-    (void)zmk_endpoints_send_report();
-}
-
-static void mj_release_mods(uint8_t mods) {
-    if (mods == 0) {
-        return;
-    }
-    struct zmk_endpoint_instance ep = zmk_endpoints_selected();
-    (void)zmk_hid_keyboard_release_modifiers(&ep, mods);
-    (void)zmk_endpoints_send_report();
-}
-
-static void mj_press_key(uint32_t keycode) {
-    struct zmk_endpoint_instance ep = zmk_endpoints_selected();
-    (void)zmk_hid_keyboard_press(&ep, keycode);
-    (void)zmk_endpoints_send_report();
-}
-
-static void mj_release_key(uint32_t keycode) {
-    struct zmk_endpoint_instance ep = zmk_endpoints_selected();
-    (void)zmk_hid_keyboard_release(&ep, keycode);
-    (void)zmk_endpoints_send_report();
-}
-
-static void mj_tap_key(uint32_t keycode, uint8_t mods) {
-    /* Press modifiers -> press key -> release key -> release modifiers */
-    if (mods) {
-        mj_press_mods(mods);
-        mj_sleep_ms(MJ_TAP_DELAY_MS);
-    }
-
-    mj_press_key(keycode);
-    mj_sleep_ms(MJ_TAP_DELAY_MS);
-    mj_release_key(keycode);
-
-    if (mods) {
-        mj_sleep_ms(MJ_TAP_DELAY_MS);
-        mj_release_mods(mods);
-    }
-
-    mj_sleep_ms(MJ_SEQ_DELAY_MS);
-}
-
-/* -------------------------------------------------------------------------- */
-/* ASCII -> (key, mods) mapping                                                */
-/* -------------------------------------------------------------------------- */
-
-struct mj_key_with_mods {
+typedef struct {
     uint32_t keycode;
-    uint8_t mods;
-    bool ok;
-};
+    bool need_shift;
+} keymap_entry_t;
 
-static struct mj_key_with_mods mj_map_ascii(char c) {
-    struct mj_key_with_mods out = {0};
+static bool map_ascii(char c, keymap_entry_t *out) {
+    if (!out) return false;
 
-    /* a-z */
+    /* Letters */
     if (c >= 'a' && c <= 'z') {
-        uint8_t usage = (uint8_t)(HID_KBD_A + (c - 'a'));
-        out.keycode = mj_key_usage(usage);
-        out.mods = 0;
-        out.ok = true;
-        return out;
+        out->keycode = (uint32_t)(KC_A + (c - 'a'));
+        out->need_shift = false;
+        return true;
     }
-
-    /* A-Z (with shift) */
     if (c >= 'A' && c <= 'Z') {
-        uint8_t usage = (uint8_t)(HID_KBD_A + (c - 'A'));
-        out.keycode = mj_key_usage(usage);
-        out.mods = MOD_LSFT;
-        out.ok = true;
-        return out;
+        out->keycode = (uint32_t)(KC_A + (c - 'A'));
+        out->need_shift = true;
+        return true;
     }
 
-    /* 0-9 */
-    if (c >= '1' && c <= '9') {
-        uint8_t usage = (uint8_t)(HID_KBD_1 + (c - '1'));
-        out.keycode = mj_key_usage(usage);
-        out.mods = 0;
-        out.ok = true;
-        return out;
-    }
-    if (c == '0') {
-        out.keycode = mj_key_usage(HID_KBD_0);
-        out.mods = 0;
-        out.ok = true;
-        return out;
+    /* Digits */
+    if (c >= '0' && c <= '9') {
+        out->keycode = (uint32_t)(KC_0 + (c - '0'));
+        out->need_shift = false;
+        return true;
     }
 
-    /* whitespace / control-ish */
+    /* Space / newline / tab */
+    if (c == ' ') { out->keycode = KC_SPACE; out->need_shift = false; return true; }
+    if (c == '\n') { out->keycode = KC_ENTER; out->need_shift = false; return true; }
+    if (c == '\t') { out->keycode = KC_TAB; out->need_shift = false; return true; }
+
+    /* Punctuation (US) */
     switch (c) {
-    case ' ':
-        out.keycode = mj_key_usage(HID_KBD_SPACE);
-        out.mods = 0;
-        out.ok = true;
-        return out;
-    case '\n':
-        out.keycode = mj_key_usage(HID_KBD_ENTER);
-        out.mods = 0;
-        out.ok = true;
-        return out;
-    case '\t':
-        out.keycode = mj_key_usage(HID_KBD_TAB);
-        out.mods = 0;
-        out.ok = true;
-        return out;
-    default:
-        break;
-    }
+    case '-': out->keycode = KC_MINUS; out->need_shift = false; return true;
+    case '_': out->keycode = KC_MINUS; out->need_shift = true;  return true;
+    case '=': out->keycode = KC_EQUAL; out->need_shift = false; return true;
+    case '+': out->keycode = KC_EQUAL; out->need_shift = true;  return true;
 
-    /* punctuation (US layout basis) */
-    switch (c) {
-    case '-': out.keycode = mj_key_usage(HID_KBD_MINUS); out.mods = 0; out.ok = true; return out;
-    case '_': out.keycode = mj_key_usage(HID_KBD_MINUS); out.mods = MOD_LSFT; out.ok = true; return out;
+    case '[': out->keycode = KC_LBKT;  out->need_shift = false; return true;
+    case '{': out->keycode = KC_LBKT;  out->need_shift = true;  return true;
+    case ']': out->keycode = KC_RBKT;  out->need_shift = false; return true;
+    case '}': out->keycode = KC_RBKT;  out->need_shift = true;  return true;
 
-    case '=': out.keycode = mj_key_usage(HID_KBD_EQUAL); out.mods = 0; out.ok = true; return out;
-    case '+': out.keycode = mj_key_usage(HID_KBD_EQUAL); out.mods = MOD_LSFT; out.ok = true; return out;
+    case '\\': out->keycode = KC_BSLH; out->need_shift = false; return true;
+    case '|':  out->keycode = KC_BSLH; out->need_shift = true;  return true;
 
-    case '[': out.keycode = mj_key_usage(HID_KBD_LBRACKET); out.mods = 0; out.ok = true; return out;
-    case '{': out.keycode = mj_key_usage(HID_KBD_LBRACKET); out.mods = MOD_LSFT; out.ok = true; return out;
+    case ';': out->keycode = KC_SEMI;  out->need_shift = false; return true;
+    case ':': out->keycode = KC_SEMI;  out->need_shift = true;  return true;
 
-    case ']': out.keycode = mj_key_usage(HID_KBD_RBRACKET); out.mods = 0; out.ok = true; return out;
-    case '}': out.keycode = mj_key_usage(HID_KBD_RBRACKET); out.mods = MOD_LSFT; out.ok = true; return out;
+    case '\'': out->keycode = KC_SQT;  out->need_shift = false; return true;
+    case '"':  out->keycode = KC_SQT;  out->need_shift = true;  return true;
 
-    case '\\': out.keycode = mj_key_usage(HID_KBD_BSLASH); out.mods = 0; out.ok = true; return out;
-    case '|':  out.keycode = mj_key_usage(HID_KBD_BSLASH); out.mods = MOD_LSFT; out.ok = true; return out;
+    case ',': out->keycode = KC_COMMA; out->need_shift = false; return true;
+    case '<': out->keycode = KC_COMMA; out->need_shift = true;  return true;
 
-    case ';': out.keycode = mj_key_usage(HID_KBD_SEMICOLON); out.mods = 0; out.ok = true; return out;
-    case ':': out.keycode = mj_key_usage(HID_KBD_SEMICOLON); out.mods = MOD_LSFT; out.ok = true; return out;
+    case '.': out->keycode = KC_DOT;   out->need_shift = false; return true;
+    case '>': out->keycode = KC_DOT;   out->need_shift = true;  return true;
 
-    case '\'': out.keycode = mj_key_usage(HID_KBD_APOSTROPHE); out.mods = 0; out.ok = true; return out;
-    case '"':  out.keycode = mj_key_usage(HID_KBD_APOSTROPHE); out.mods = MOD_LSFT; out.ok = true; return out;
+    case '/': out->keycode = KC_FSLH;  out->need_shift = false; return true;
+    case '?': out->keycode = KC_FSLH;  out->need_shift = true;  return true;
 
-    case '`': out.keycode = mj_key_usage(HID_KBD_GRAVE); out.mods = 0; out.ok = true; return out;
-    case '~': out.keycode = mj_key_usage(HID_KBD_GRAVE); out.mods = MOD_LSFT; out.ok = true; return out;
+    case '`': out->keycode = KC_GRAVE; out->need_shift = false; return true;
+    case '~': out->keycode = KC_GRAVE; out->need_shift = true;  return true;
 
-    case ',': out.keycode = mj_key_usage(HID_KBD_COMMA); out.mods = 0; out.ok = true; return out;
-    case '<': out.keycode = mj_key_usage(HID_KBD_COMMA); out.mods = MOD_LSFT; out.ok = true; return out;
-
-    case '.': out.keycode = mj_key_usage(HID_KBD_DOT); out.mods = 0; out.ok = true; return out;
-    case '>': out.keycode = mj_key_usage(HID_KBD_DOT); out.mods = MOD_LSFT; out.ok = true; return out;
-
-    case '/': out.keycode = mj_key_usage(HID_KBD_SLASH); out.mods = 0; out.ok = true; return out;
-    case '?': out.keycode = mj_key_usage(HID_KBD_SLASH); out.mods = MOD_LSFT; out.ok = true; return out;
-
-    /* Number row symbols (US) */
-    case '!': out.keycode = mj_key_usage(HID_KBD_1); out.mods = MOD_LSFT; out.ok = true; return out;
-    case '@': out.keycode = mj_key_usage(HID_KBD_2); out.mods = MOD_LSFT; out.ok = true; return out;
-    case '#': out.keycode = mj_key_usage(HID_KBD_3); out.mods = MOD_LSFT; out.ok = true; return out;
-    case '$': out.keycode = mj_key_usage(HID_KBD_4); out.mods = MOD_LSFT; out.ok = true; return out;
-    case '%': out.keycode = mj_key_usage(HID_KBD_5); out.mods = MOD_LSFT; out.ok = true; return out;
-    case '^': out.keycode = mj_key_usage(HID_KBD_6); out.mods = MOD_LSFT; out.ok = true; return out;
-    case '&': out.keycode = mj_key_usage(HID_KBD_7); out.mods = MOD_LSFT; out.ok = true; return out;
-    case '*': out.keycode = mj_key_usage(HID_KBD_8); out.mods = MOD_LSFT; out.ok = true; return out;
-    case '(': out.keycode = mj_key_usage(HID_KBD_9); out.mods = MOD_LSFT; out.ok = true; return out;
-    case ')': out.keycode = mj_key_usage(HID_KBD_0); out.mods = MOD_LSFT; out.ok = true; return out;
+    /* US shift-number row symbols (note: assumes KC_1..KC_0 are contiguous) */
+    case '!': out->keycode = KC_1; out->need_shift = true; return true;
+    case '@': out->keycode = KC_2; out->need_shift = true; return true;
+    case '#': out->keycode = KC_3; out->need_shift = true; return true;
+    case '$': out->keycode = KC_4; out->need_shift = true; return true;
+    case '%': out->keycode = KC_5; out->need_shift = true; return true;
+    case '^': out->keycode = KC_6; out->need_shift = true; return true;
+    case '&': out->keycode = KC_7; out->need_shift = true; return true;
+    case '*': out->keycode = KC_8; out->need_shift = true; return true;
+    case '(': out->keycode = KC_9; out->need_shift = true; return true;
+    case ')': out->keycode = KC_0; out->need_shift = true; return true;
 
     default:
         break;
     }
 
-    out.ok = false;
-    return out;
+    return false;
 }
 
-/* -------------------------------------------------------------------------- */
-/* Public API                                                                  */
-/* -------------------------------------------------------------------------- */
+static void send_text_plain(const char *s) {
+    if (!s) return;
 
-void mj_send_ascii_string(const char *s) {
-    if (!s) {
-        return;
-    }
     for (const char *p = s; *p; p++) {
-        struct mj_key_with_mods km = mj_map_ascii(*p);
-        if (!km.ok) {
-            /* unknown char => skip */
+        keymap_entry_t km;
+        if (!map_ascii(*p, &km)) {
+            /* Unknown -> ignore (or log) */
+            LOG_DBG("unknown char: 0x%02x", (unsigned char)*p);
             continue;
         }
-        mj_tap_key(km.keycode, km.mods);
+
+        if (km.need_shift) {
+            tap_with_mod(KC_LSHIFT, km.keycode);
+        } else {
+            tap_key(km.keycode);
+        }
+    }
+}
+
+/* -------------------------------------------------------------------------- */
+/* {#...} token handling                                                      */
+/* -------------------------------------------------------------------------- */
+
+static bool parse_fkey(const char *name, uint32_t *out_kc) {
+    if (!name || !out_kc) return false;
+    /* name like "F13" */
+    if (name[0] != 'F') return false;
+
+    int n = 0;
+    for (const char *p = name + 1; *p; p++) {
+        if (*p < '0' || *p > '9') return false;
+        n = n * 10 + (*p - '0');
+    }
+    if (n < 1 || n > 24) return false;
+
+    /* ZMK has KC_F1..KC_F24 */
+    *out_kc = (uint32_t)(KC_F1 + (n - 1));
+    return true;
+}
+
+static bool handle_hash_token(const char *token) {
+    /* token examples: "Left", "BackSpace", "F13" */
+    if (!token || !*token) return false;
+
+    uint32_t kc = 0;
+
+    if (!strcmp(token, "Left")) kc = KC_LEFT;
+    else if (!strcmp(token, "Right")) kc = KC_RIGHT;
+    else if (!strcmp(token, "Up")) kc = KC_UP;
+    else if (!strcmp(token, "Down")) kc = KC_DOWN;
+    else if (!strcmp(token, "Home")) kc = KC_HOME;
+    else if (!strcmp(token, "End")) kc = KC_END;
+    else if (!strcmp(token, "Enter")) kc = KC_ENTER;
+    else if (!strcmp(token, "Tab")) kc = KC_TAB;
+    else if (!strcmp(token, "Escape")) kc = KC_ESCAPE;
+    else if (!strcmp(token, "BackSpace")) kc = KC_BSPC;
+    else if (!strcmp(token, "Delete")) kc = KC_DEL;
+    else if (parse_fkey(token, &kc)) {
+        /* ok */
+    } else {
+        return false;
+    }
+
+    tap_key(kc);
+    return true;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Public API                                                                 */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * Entry point used by core:
+ * - It may receive the command strings from mejiro_tables.c (like "{#Left}")
+ */
+void mejiro_send_roman(const char *s) {
+    if (!s || !*s) return;
+
+    /* Special commands beginning with '=' (subset) */
+    if (!strcmp(s, "=undo")) {
+        tap_with_mod(KC_LCTRL, KC_Z);
+        return;
+    }
+
+    /* Parse stream with {...} blocks */
+    const char *p = s;
+    while (*p) {
+        if (*p != '{') {
+            /* emit plain chunk until '{' */
+            const char *start = p;
+            while (*p && *p != '{') p++;
+
+            /* copy small chunk to buffer */
+            char buf[64];
+            size_t len = (size_t)(p - start);
+            while (len > 0) {
+                size_t n = (len < sizeof(buf) - 1) ? len : (sizeof(buf) - 1);
+                for (size_t i = 0; i < n; i++) buf[i] = start[i];
+                buf[n] = '\0';
+                send_text_plain(buf);
+                start += n;
+                len -= n;
+            }
+            continue;
+        }
+
+        /* now *p == '{' */
+        const char *block = p;
+        const char *end = strchr(block, '}');
+        if (!end) {
+            /* unmatched '{' -> rest as plain */
+            send_text_plain(block);
+            return;
+        }
+
+        /* content inside braces */
+        size_t inner_len = (size_t)(end - (block + 1));
+        char inner[64];
+        if (inner_len >= sizeof(inner)) inner_len = sizeof(inner) - 1;
+        for (size_t i = 0; i < inner_len; i++) inner[i] = block[1 + i];
+        inner[inner_len] = '\0';
+
+        /* Handle {^literal^} */
+        if (inner[0] == '^') {
+            char *caret_end = strrchr(inner, '^');
+            if (caret_end && caret_end != inner) {
+                /* extract between first '^' and last '^' */
+                *caret_end = '\0';
+                send_text_plain(inner + 1);
+            } else {
+                /* malformed -> treat as plain */
+                send_text_plain("{");
+                send_text_plain(inner);
+                send_text_plain("}");
+            }
+            p = end + 1;
+            continue;
+        }
+
+        /* Handle {#Token} */
+        if (inner[0] == '#') {
+            if (!handle_hash_token(inner + 1)) {
+                /* unknown -> treat as plain */
+                send_text_plain("{");
+                send_text_plain(inner);
+                send_text_plain("}");
+            }
+            p = end + 1;
+            continue;
+        }
+
+        /* Unknown {...} -> treat as literal */
+        send_text_plain("{");
+        send_text_plain(inner);
+        send_text_plain("}");
+        p = end + 1;
     }
 }
 
 /*
- * Convenience: send “special keys” that your tables may request
- * (e.g. {#Left}, {#Right}, etc.) as discrete taps.
- *
- * You can call these from your command parser (mejiro_core) if you want.
+ * Convenience: send a single keycode (tap)
+ * If core wants to call it directly.
  */
-void mj_tap_left(void)      { mj_tap_key(mj_key_usage(HID_KBD_LEFT), 0); }
-void mj_tap_right(void)     { mj_tap_key(mj_key_usage(HID_KBD_RIGHT), 0); }
-void mj_tap_up(void)        { mj_tap_key(mj_key_usage(HID_KBD_UP), 0); }
-void mj_tap_down(void)      { mj_tap_key(mj_key_usage(HID_KBD_DOWN), 0); }
-void mj_tap_home(void)      { mj_tap_key(mj_key_usage(HID_KBD_HOME), 0); }
-void mj_tap_end(void)       { mj_tap_key(mj_key_usage(HID_KBD_END), 0); }
-void mj_tap_escape(void)    { mj_tap_key(mj_key_usage(HID_KBD_ESCAPE), 0); }
-void mj_tap_backspace(void) { mj_tap_key(mj_key_usage(HID_KBD_BACKSPACE), 0); }
-void mj_tap_delete(void)    { mj_tap_key(mj_key_usage(HID_KBD_DELETE), 0); }
-void mj_tap_enter(void)     { mj_tap_key(mj_key_usage(HID_KBD_ENTER), 0); }
+void mejiro_tap_keycode(uint32_t keycode) {
+    tap_key(keycode);
+}
