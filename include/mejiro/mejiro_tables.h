@@ -1,19 +1,18 @@
 #pragma once
-#include <stddef.h>
+#include <stdbool.h>
+#include <stdint.h>
 
-struct mj_kv {
-    const char *k;
-    const char *v;
-};
+#include "mejiro_key_ids.h"
 
-extern const struct mj_kv mj_users[];
-extern const size_t mj_users_len;
+/*
+ * Convert stroke (left/right/mod masks) into a normalized stroke string,
+ * then lookup output string.
+ *
+ * Returns true and sets out_roman if matched.
+ */
+bool mejiro_lookup_roman(uint32_t left_mask, uint32_t right_mask, uint32_t mod_mask,
+                        const char **out_roman);
 
-extern const struct mj_kv mj_abstract[];
-extern const size_t mj_abstract_len;
-
-extern const struct mj_kv mj_verbs[];
-extern const size_t mj_verbs_len;
-
-extern const struct mj_kv mj_commands[];
-extern const size_t mj_commands_len;
+/* Build normalized stroke string mainly for debugging/logging. */
+void mejiro_build_stroke_string(uint32_t left_mask, uint32_t right_mask, uint32_t mod_mask,
+                               char *out, size_t out_len);
