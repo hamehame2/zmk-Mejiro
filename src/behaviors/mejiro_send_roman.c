@@ -86,7 +86,13 @@ LOG_MODULE_REGISTER(mejiro_send_roman, CONFIG_ZMK_LOG_LEVEL);
 
 /* Function keys */
 #define KC_F1 F1
-
+/* QMK-style compatibility (minimum set) */
+#ifndef KC_Z
+#define KC_Z Z
+#endif
+#ifndef KC_LCTRL
+#define KC_LCTRL LCTRL
+#endif
 /* -------------------------------------------------------------------------- */
 /* Key event helpers                                                          */
 /* -------------------------------------------------------------------------- */
