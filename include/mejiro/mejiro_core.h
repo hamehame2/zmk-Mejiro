@@ -2,9 +2,26 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-/* behavior_mejiro から呼ぶ */
-void mejiro_on_press(uint8_t key_id);
-void mejiro_on_release(uint8_t key_id);
+#include "mejiro_key_ids.h"
 
-/* (naginata hook 等から “今のchord_maskをテーブル引きしたい” ため) */
-bool mejiro_commit_now(void);
+/*
+ * Core state: collects keys while pressed, emits when all are released.
+ */
+
+struct mejiro_state {
+    uint32_t left_mask;   /* bits for MJ_L_* */
+    uint32_t right_mask;  /* bits for MJ_R_* */
+    uint32_t mod_mask;    /* bits for MJ_POUND / MJ_STAR */
+    bool active;
+};
+
+void mejiro_reset(struct mejiro_state *st);
+
+/* Register a press/release of a Mejiro key-id. */
+void mejiro_on_key_event(struct mejiro_state *st, enum mejiro_key_id id, bool pressed);
+
+/*
+ * Try to emit when release completes a stroke.
+ * Returns true if something was emitted.
+ */
+bool mejiro_try_emit(struct mejiro_state *st);
