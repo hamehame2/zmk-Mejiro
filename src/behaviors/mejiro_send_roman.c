@@ -26,6 +26,7 @@
 #include <dt-bindings/zmk/modifiers.h>
 #include <string.h>
 #include <stdint.h>
+#include <zmk/hid.h>                 // 既にあるならそのまま
 
 
 
