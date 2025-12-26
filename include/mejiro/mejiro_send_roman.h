@@ -7,13 +7,13 @@ extern "C" {
 
 /**
  * Send a roman string (ASCII) to host.
- * This function is "fire and forget" and returns void.
+ * fire-and-forget.
  */
 void mejiro_send_roman_exec(const char *s);
 
 /**
- * Execute a simple command string if you are using a command-like layer.
- * Returns true if the command was recognized and handled.
+ * Execute a simple command-like string.
+ * Returns true if handled.
  */
 bool mejiro_send_roman_exec_cmd(const char *cmd);
 
