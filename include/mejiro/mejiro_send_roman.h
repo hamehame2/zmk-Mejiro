@@ -1,5 +1,14 @@
 #pragma once
+
 #include <stdbool.h>
 
-/* Send roman string through ZMK (implementation uses zmk_hid / behavior layer). */
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* Send roman string (minimal stub ok). */
 bool mejiro_send_roman(const char *roman);
+
+#ifdef __cplusplus
+}
+#endif
