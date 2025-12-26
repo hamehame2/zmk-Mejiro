@@ -28,6 +28,8 @@
 #include <stdint.h>
 #include <zmk/hid.h>                 // 既にあるならそのまま
 
+#include <zmk_naginata/nglistarray.h>
+#include <zephyr/sys/util.h>   /* ARG_UNUSED */
 
 
 
@@ -403,3 +405,23 @@ void mejiro_send_roman(const char *s) {
 void mejiro_tap_keycode(uint32_t keycode) {
     tap_key(keycode);
 }
+
+/* -------------------------------------------------------------------------- */
+/* Linker-required symbol (called from mejiro_core.c)                          */
+/* -------------------------------------------------------------------------- */
+
+/* mejiro_core.c が呼ぶ名前に合わせるだけの薄いラッパ */
+void mejiro_send_roman_exec(const char *s) {
+    mejiro_send_roman(s);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Naginata hook stub (called from behavior_naginata.c)                        */
+/* -------------------------------------------------------------------------- */
+
+bool mejiro_try_emit_from_nginput(const NGListArray *nginput) {
+    ARG_UNUSED(nginput);
+    /* まだメジロ変換を実装していないので「処理しなかった」扱いで返す */
+    return false;
+}
+
