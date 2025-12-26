@@ -14,6 +14,7 @@
 #define MJ_X   7
 
 /* ====== user-facing aliases (DTSで使う短い名前) ====== */
+/*
 #define L_n MJ_L_n
 #define L_t MJ_L_t
 #define L_k MJ_L_k
@@ -24,3 +25,4 @@
 
 #define H MJ_H
 #define X MJ_X
+*/
