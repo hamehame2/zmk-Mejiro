@@ -1,29 +1,43 @@
-#include "mejiro/mejiro_core.h"
+/*
+ * Mejiro core: build stroke string from held bitmask and emit roman string.
+ * Also provides compatibility/wrapper symbols required by behavior_mejiro.c
+ * and behavior_naginata.c, without adding any extra files.
+ */
 
-#include <zephyr/logging/log.h>
-LOG_MODULE_REGISTER(mejiro_core, CONFIG_ZMK_LOG_LEVEL);
-
+#include <string.h>
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <stdbool.h>
-#include <string.h>
 
+#include <zephyr/logging/log.h>
+
+#include <zmk/behavior.h>
+#include <zmk/keymap.h>
+
+/* for stub: mejiro_try_emit_from_nginput */
+#include <zmk_naginata/nglistarray.h>
+
+#include "mejiro/mejiro_core.h"
 #include "mejiro/mejiro_tables.h"
 #include "mejiro/mejiro_send_roman.h"
 
 /* IDs are defined in dt-bindings/zmk/mejiro.h */
 #include <dt-bindings/zmk/mejiro.h>
 
+LOG_MODULE_REGISTER(mejiro_core, CONFIG_ZMK_LOG_LEVEL);
+
 /* --- internal state --------------------------------------------------- */
-static uint32_t held_mask = 0;   /* keys currently held */
-static uint32_t chord_mask = 0;  /* union of keys pressed in this chord */
+static uint32_t held_mask = 0;  /* keys currently held */
+static uint32_t chord_mask = 0; /* union of keys pressed in this chord */
 
 /* --- helpers ---------------------------------------------------------- */
 static inline bool id_valid(uint8_t id) { return id <= MJ_X; }
 static inline uint32_t bit(uint8_t id) { return (uint32_t)1u << id; }
 
 static const struct mj_kv *find_kv(const struct mj_kv *tbl, size_t len, const char *k) {
-    if (!tbl || !k) return NULL;
+    if (!tbl || !k) {
+        return NULL;
+    }
     for (size_t i = 0; i < len; i++) {
         if (tbl[i].k && strcmp(tbl[i].k, k) == 0) {
             return &tbl[i];
@@ -34,14 +48,16 @@ static const struct mj_kv *find_kv(const struct mj_kv *tbl, size_t len, const ch
 
 /*
  * 原典(mejiro_base.py)の表記に合わせる：
- *  - 左:  STKNYIAUntk
- *  - 右:  STKNYIAUntk
- *  - '-' は「右に何かある」or「左が空で右だけ」のとき必須
- *  - '#' は中置（右があるなら -#...）、右が無いなら末尾（tk# / #）
- *  - '*' は末尾
+ * - 左: STKNYIAUntk
+ * - 右: STKNYIAUntk
+ * - '-' は「右に何かある」or「左が空で右だけ」のとき必須
+ * - '#' は中置（右があるなら -#...）、右が無いなら末尾（tk# / #）
+ * - '*' は末尾
  */
 static bool build_stroke_from_mask(uint32_t m, char *out, size_t out_sz) {
-    if (!out || out_sz == 0) return false;
+    if (!out || out_sz == 0) {
+        return false;
+    }
     out[0] = '\0';
 
     char L[16] = {0};
@@ -84,36 +100,51 @@ static bool build_stroke_from_mask(uint32_t m, char *out, size_t out_sz) {
     /* '-' rules */
     const bool need_dash = has_right || (!has_left && has_right);
 
-    /* build */
     size_t w = 0;
-    #define APPEND_CH(ch) do { \
-        if (w + 1 >= out_sz) return false; \
-        out[w++] = (ch); out[w] = '\0'; \
-    } while (0)
-    #define APPEND_STR(s) do { \
-        const char *_s = (s); \
-        const size_t _n = strlen(_s); \
-        if (w + _n >= out_sz) return false; \
-        memcpy(&out[w], _s, _n); \
-        w += _n; out[w] = '\0'; \
+
+#define APPEND_CH(ch)                                                                              \
+    do {                                                                                           \
+        if (w + 1 >= out_sz)                                                                       \
+            return false;                                                                          \
+        out[w++] = (ch);                                                                           \
+        out[w] = '\0';                                                                             \
     } while (0)
 
-    if (has_left) APPEND_STR(L);
+#define APPEND_STR(s)                                                                              \
+    do {                                                                                           \
+        const char *_s = (s);                                                                      \
+        const size_t _n = strlen(_s);                                                              \
+        if (w + _n >= out_sz)                                                                      \
+            return false;                                                                          \
+        memcpy(&out[w], _s, _n);                                                                   \
+        w += _n;                                                                                   \
+        out[w] = '\0';                                                                             \
+    } while (0)
+
+    if (has_left) {
+        APPEND_STR(L);
+    }
 
     if (need_dash) {
         APPEND_CH('-');
         /* 原典: '-' の後に # が来る形（-#...） */
-        if (has_H) APPEND_CH('#');
-        if (has_right) APPEND_STR(R);
+        if (has_H)
+            APPEND_CH('#');
+        if (has_right)
+            APPEND_STR(R);
     } else {
         /* 右が無いので # は末尾側に来る（tk# / #） */
-        if (has_H) APPEND_CH('#');
+        if (has_H)
+            APPEND_CH('#');
     }
 
-    if (has_X) APPEND_CH('*');
+    if (has_X) {
+        APPEND_CH('*');
+    }
 
-    /* empty chord is not ok */
-    if (w == 0) return false;
+    if (w == 0) {
+        return false;
+    }
     return true;
 }
 
@@ -127,8 +158,7 @@ static void commit_if_ready(void) {
 
     char stroke[32];
     const bool ok = build_stroke_from_mask(chord_mask, stroke, sizeof(stroke));
-    LOG_DBG("commit: mask=0x%08x stroke='%s'", chord_mask, ok ? stroke : "<none>");
-
+    LOG_DBG("commit: mask=0x%08x stroke='%s'", chord_mask, ok ? stroke : "");
     chord_mask = 0;
 
     if (!ok || stroke[0] == '\0') {
@@ -152,8 +182,8 @@ static void commit_if_ready(void) {
 
 /* --- public API ------------------------------------------------------- */
 void mejiro_on_press(uint8_t key_id) {
-    if (!id_valid(key_id)) return;
-
+    if (!id_valid(key_id))
+        return;
     const uint32_t b = bit(key_id);
     held_mask |= b;
     chord_mask |= b;
@@ -161,19 +191,44 @@ void mejiro_on_press(uint8_t key_id) {
 }
 
 void mejiro_on_release(uint8_t key_id) {
-    if (!id_valid(key_id)) return;
-
+    if (!id_valid(key_id))
+        return;
     const uint32_t b = bit(key_id);
     held_mask &= ~b;
     LOG_DBG("release id=%u held=0x%08x chord=0x%08x", key_id, held_mask, chord_mask);
-
     commit_if_ready();
 }
 
 /* naginata 側などから「今すぐ commit」したい用 */
 bool mejiro_commit_now(void) {
-    if (held_mask != 0) return false;
-    if (chord_mask == 0) return false;
+    if (held_mask != 0)
+        return false;
+    if (chord_mask == 0)
+        return false;
     commit_if_ready();
     return true;
+}
+
+/* ----------------------------------------------------------------------
+ * Compatibility / missing-symbol fillers (NO extra files)
+ * -------------------------------------------------------------------- */
+
+/* behavior_mejiro.c が参照するシンボル名に合わせたラッパ */
+int mejiro_core_on_press(struct zmk_behavior_binding *binding, struct zmk_behavior_binding_event event) {
+    (void)event;
+    /* &mj L_n などの param1 を Mejiro key_id として扱う想定 */
+    mejiro_on_press((uint8_t)binding->param1);
+    return 0;
+}
+
+int mejiro_core_on_release(struct zmk_behavior_binding *binding, struct zmk_behavior_binding_event event) {
+    (void)event;
+    mejiro_on_release((uint8_t)binding->param1);
+    return 0;
+}
+
+/* naginata_release から参照されるシンボルの穴埋め（あなた指定の stub） */
+bool mejiro_try_emit_from_nginput(const NGListArray *nginput) {
+    (void)nginput;
+    return false;
 }
