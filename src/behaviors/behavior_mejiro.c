@@ -1,24 +1,39 @@
+/*
+ * Copyright (c) 2020 The ZMK Contributors
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+#define DT_DRV_COMPAT zmk_behavior_mejiro
+
 #include <zephyr/device.h>
 #include <drivers/behavior.h>
-#include <zephyr/logging/log.h>
 
 #include <zmk/behavior.h>
-#include <zmk/keymap.h>
 
-/* これを追加：mejiro_on_press/release の宣言が入っている */
-#include <mejiro/mejiro_core.h>
+#include "mejiro_core.h"
 
-LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
+/*
+ * ZMK behavior callback:
+ * - must return int
+ * - your mejiro_on_press/mejiro_on_release can be void; we return 0 here.
+ */
 
 static int on_keymap_binding_pressed(struct zmk_behavior_binding *binding,
-                                     struct zmk_behavior_binding_event event) {
-    /* param1 を ID としてコアへ渡す */
-    return mejiro_on_press((uint8_t)binding->param1);
+                                    struct zmk_behavior_binding_event event) {
+    ARG_UNUSED(event);
+
+    /* param1 is used by your &mj binding (e.g. layer id / key id) */
+    mejiro_on_press((uint8_t)binding->param1);
+    return 0;
 }
 
 static int on_keymap_binding_released(struct zmk_behavior_binding *binding,
-                                      struct zmk_behavior_binding_event event) {
-    return mejiro_on_release((uint8_t)binding->param1);
+                                     struct zmk_behavior_binding_event event) {
+    ARG_UNUSED(event);
+
+    mejiro_on_release((uint8_t)binding->param1);
+    return 0;
 }
 
 static const struct behavior_driver_api behavior_mejiro_driver_api = {
@@ -26,9 +41,6 @@ static const struct behavior_driver_api behavior_mejiro_driver_api = {
     .binding_released = on_keymap_binding_released,
 };
 
-#define MEJIRO_INST(n)                                                                             \
-    static int behavior_mejiro_init_##n(const struct device *dev) { return 0; }                    \
-    DEVICE_DT_INST_DEFINE(n, behavior_mejiro_init_##n, NULL, NULL, NULL, APPLICATION,              \
-                          CONFIG_KERNEL_INIT_PRIORITY_DEFAULT, &behavior_mejiro_driver_api);
-
-DT_INST_FOREACH_STATUS_OKAY(MEJIRO_INST)
+DEVICE_DT_INST_DEFINE(0, NULL, NULL, NULL, NULL, APPLICATION,
+                      CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
+                      &behavior_mejiro_driver_api);
