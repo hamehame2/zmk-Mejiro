@@ -21,10 +21,70 @@
 
 #include <zmk/events/keycode_state_changed.h>
 #include <zmk/event_manager.h>
-
+/* ZMK keycode definitions (A, N1, LSHFT, etc.) */
 #include <dt-bindings/zmk/keys.h>
+#include <dt-bindings/zmk/modifiers.h>
+#include <string.h>
+#include <stdint.h>
+
+
+
 
 LOG_MODULE_REGISTER(mejiro_send_roman, CONFIG_ZMK_LOG_LEVEL);
+
+/* -------------------------------------------------------------------------- */
+/* QMK-style KC_* compatibility layer (minimal set used in this file)          */
+/* -------------------------------------------------------------------------- */
+/* Letters (HID contiguous) */
+#define KC_A A
+
+/* Digits (ZMK uses N1..N0 names) */
+#define KC_1 N1
+#define KC_2 N2
+#define KC_3 N3
+#define KC_4 N4
+#define KC_5 N5
+#define KC_6 N6
+#define KC_7 N7
+#define KC_8 N8
+#define KC_9 N9
+#define KC_0 N0
+
+/* Whitespace / control */
+#define KC_SPACE SPACE
+#define KC_ENTER ENTER
+#define KC_TAB   TAB
+#define KC_ESCAPE ESC
+#define KC_BSPC  BSPC
+#define KC_DEL   DEL
+
+/* Arrows / nav */
+#define KC_LEFT  LEFT
+#define KC_RIGHT RIGHT
+#define KC_UP    UP
+#define KC_DOWN  DOWN
+#define KC_HOME  HOME
+#define KC_END   END
+
+/* Modifiers */
+#define KC_LSHIFT LSHFT
+#define KC_LCTRL  LCTRL
+
+/* Punctuation (US) */
+#define KC_MINUS MINUS
+#define KC_EQUAL EQUAL
+#define KC_LBKT  LBKT
+#define KC_RBKT  RBKT
+#define KC_BSLH  BSLH
+#define KC_SEMI  SEMI
+#define KC_SQT   SQT
+#define KC_COMMA COMMA
+#define KC_DOT   DOT
+#define KC_FSLH  FSLH
+#define KC_GRAVE GRAVE
+
+/* Function keys */
+#define KC_F1 F1
 
 /* -------------------------------------------------------------------------- */
 /* Key event helpers                                                          */
@@ -93,13 +153,26 @@ static bool map_ascii(char c, keymap_entry_t *out) {
         return true;
     }
 
-    /* Digits */
+/*
+     //Digits
     if (c >= '0' && c <= '9') {
         out->keycode = (uint32_t)(KC_0 + (c - '0'));
         out->need_shift = false;
         return true;
     }
-
+*/
+        /* Digits (HID usage order is 1..9 then 0, so handle correctly) */
+    if (c >= '1' && c <= '9') {
+        out->keycode = (uint32_t)(KC_1 + (c - '1')); /* KC_1..KC_9 are contiguous */
+        out->need_shift = false;
+        return true;
+    }
+    if (c == '0') {
+        out->keycode = (uint32_t)KC_0;
+        out->need_shift = false;
+        return true;
+    }
+    
     /* Space / newline / tab */
     if (c == ' ') { out->keycode = KC_SPACE; out->need_shift = false; return true; }
     if (c == '\n') { out->keycode = KC_ENTER; out->need_shift = false; return true; }
