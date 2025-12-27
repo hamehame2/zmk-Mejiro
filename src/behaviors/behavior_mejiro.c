@@ -117,6 +117,9 @@ static const struct behavior_driver_api behavior_mejiro_driver_api = {
     .binding_released = behavior_mejiro_binding_released,
 };
 
-DEVICE_DT_INST_DEFINE(0, NULL, NULL, NULL, NULL,
-                      APPLICATION, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
-                      &behavior_mejiro_driver_api);
+#define DT_DRV_COMPAT zmk_behavior_mejiro
+#define MEJIRO_NODE DT_NODELABEL(mj)
+
+DEVICE_DT_DEFINE(MEJIRO_NODE, NULL, NULL, NULL, NULL,
+                 APPLICATION, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
+                 &behavior_mejiro_driver_api);
