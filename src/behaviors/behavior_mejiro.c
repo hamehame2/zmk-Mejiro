@@ -121,9 +121,20 @@ static const struct behavior_driver_api behavior_mejiro_driver_api = {
 /* Device instance                                                            */
 /* -------------------------------------------------------------------------- */
 
-DEVICE_DT_INST_DEFINE(0, NULL, NULL, NULL, NULL,
-                      POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
-                      &behavior_mejiro_driver_api);
+#define DT_DRV_COMPAT zmk_behavior_mejiro
+
+static const struct behavior_driver_api behavior_mejiro_driver_api = {
+    .binding_pressed = on_keymap_binding_pressed,
+    .binding_released = on_keymap_binding_released,
+};
+
+#define BEHAVIOR_MEJIRO_INST(n)                                                \
+    BEHAVIOR_DT_INST_DEFINE(n, NULL, NULL, NULL, NULL,                         \
+                            POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT, \
+                            &behavior_mejiro_driver_api);
+
+DT_INST_FOREACH_STATUS_OKAY(BEHAVIOR_MEJIRO_INST)
+
 
 
 /**
@@ -145,3 +156,4 @@ bool mejiro_try_emit_from_nginput(const NGListArray *nginput, int64_t timestamp)
     // TODO: 次の段階で nginput をシリアライズ→テーブル参照→送信 を実装する
     return false;
 }
+
