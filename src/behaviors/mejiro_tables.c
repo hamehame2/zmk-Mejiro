@@ -1,32 +1,45 @@
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdint.h>
-#include <string.h>
-
+/*
+ * SPDX-License-Identifier: MIT
+ */
 #include "mejiro/mejiro_tables.h"
 
-/*
- * まず疎通確認:
- *  - 何か stroke が来たら必ず "a" を返す
- * これで「&mj で無音」が “ルーティング/確定/送信” のどこで止まってるかを切り分けできる。
- *
- * 疎通が取れたら、ここを本物の辞書に差し替える。
- */
-bool mejiro_tables_lookup(const char *stroke, char *out, size_t out_len) {
-    if (!stroke || !out || out_len == 0) {
+#include <string.h>
+
+/* 最小：動作確認用。必要なら後で増やす */
+struct entry {
+    const char *stroke;
+    const char *out;
+};
+
+static const struct entry k_table[] = {
+    /* 例: 左だけ */
+    {"t", "t"},
+    {"k", "k"},
+    {"n", "n"},
+
+    /* 例: 右だけ（右だけは '-' 始まりのルールに合わせる） */
+    {"-t", "t"},
+    {"-k", "k"},
+    {"-n", "n"},
+
+    /* 例: 両手（'-' 挟む） */
+    {"t-k", "tk"},
+    {"k-t", "kt"},
+
+    /* 例: mod */
+    {"t#", "t"}, /* '#' は装飾扱いにしても良い。ここは仮 */
+};
+
+bool mejiro_tables_lookup(const char *stroke, const char **out) {
+    if (!stroke || !out) {
         return false;
     }
 
-    /* 空 stroke は不一致 */
-    if (stroke[0] == '\0') {
-        return false;
+    for (size_t i = 0; i < (sizeof(k_table) / sizeof(k_table[0])); i++) {
+        if (strcmp(k_table[i].stroke, stroke) == 0) {
+            *out = k_table[i].out;
+            return true;
+        }
     }
-
-    /* 疎通用: 常に "a" */
-    if (out_len < 2) {
-        return false;
-    }
-    out[0] = 'a';
-    out[1] = '\0';
-    return true;
+    return false;
 }
