@@ -2,12 +2,12 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include <zmk/behavior.h>                 /* struct zmk_behavior_binding_event */
 #include "mejiro/mejiro_key_ids.h"
-#include <zmk/event_manager.h>   // zmk_event_t がここ（もしくは適切なヘッダ）
+
 /*
  * Core state: collects keys while pressed, emits when all are released.
  */
-
 struct mejiro_state {
     uint32_t left_mask;   /* bits for MJ_L_* */
     uint32_t right_mask;  /* bits for MJ_R_* */
@@ -22,7 +22,12 @@ void mejiro_on_key_event(struct mejiro_state *st, enum mejiro_key_id id, bool pr
 
 /*
  * Try to emit when release completes a stroke.
- * Returns true if something was emitted.
+ * Returns true if something was emitted (or would be emitted).
  */
 bool mejiro_try_emit(struct mejiro_state *st);
-int mejiro_on_binding_released(const zmk_event_t *event);
+
+/*
+ * Optional helper if you want core to own the "released" entrypoint.
+ * IMPORTANT: behavior handlers pass zmk_behavior_binding_event, NOT zmk_event_t.
+ */
+int mejiro_on_binding_released(const struct zmk_behavior_binding_event *event);
