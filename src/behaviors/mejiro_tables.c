@@ -1,49 +1,32 @@
-/*
- * SPDX-License-Identifier: MIT
- *
- * Minimal bring-up tables for Mejiro:
- * - Converts masks to a simple ASCII string so we can confirm output.
- *
- * Later you will replace this with real Mejiro mapping.
- */
-
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
 
-static const char left_chars[16]  = { 'a','s','d','f','g','h','j','k','l','q','w','e','r','t','y','u' };
-static const char right_chars[16] = { 'n','m',',','.','/','z','x','c','v','b','p','o','i','0','1','2' };
+#include "mejiro/mejiro_tables.h"
 
 /*
- * Build an output string from masks (deterministic order).
- * out must be large enough. returns out length.
+ * まず疎通確認:
+ *  - 何か stroke が来たら必ず "a" を返す
+ * これで「&mj で無音」が “ルーティング/確定/送信” のどこで止まってるかを切り分けできる。
+ *
+ * 疎通が取れたら、ここを本物の辞書に差し替える。
  */
-size_t mejiro_tables_build_output(uint32_t left_mask, uint32_t right_mask, uint32_t mod_mask,
-                                  char *out, size_t out_cap) {
-    (void)mod_mask;
-
-    if (!out || out_cap == 0) {
-        return 0;
+bool mejiro_tables_lookup(const char *stroke, char *out, size_t out_len) {
+    if (!stroke || !out || out_len == 0) {
+        return false;
     }
 
-    size_t w = 0;
-
-    /* left */
-    for (int i = 0; i < 16; i++) {
-        if (left_mask & (1u << i)) {
-            if (w + 1 >= out_cap) break;
-            out[w++] = left_chars[i];
-        }
+    /* 空 stroke は不一致 */
+    if (stroke[0] == '\0') {
+        return false;
     }
 
-    /* right */
-    for (int i = 0; i < 16; i++) {
-        if (right_mask & (1u << i)) {
-            if (w + 1 >= out_cap) break;
-            out[w++] = right_chars[i];
-        }
+    /* 疎通用: 常に "a" */
+    if (out_len < 2) {
+        return false;
     }
-
-    out[w] = '\0';
-    return w;
+    out[0] = 'a';
+    out[1] = '\0';
+    return true;
 }
