@@ -1,13 +1,18 @@
 #pragma once
-
-#include <stdbool.h>
+/*
+ * SPDX-License-Identifier: MIT
+ *
+ * Roman output (ASCII -> HID key taps)
+ */
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/* Send roman string (minimal stub ok). */
-bool mejiro_send_roman(const char *roman);
+#include <stdbool.h>
+#include <stdint.h>
+
+bool mejiro_send_text(const char *s, int64_t timestamp);
 
 #ifdef __cplusplus
 }
