@@ -1,7 +1,7 @@
 #pragma once
 #include <stdbool.h>
 #include <stdint.h>
-
+#include <zmk_naginata/nglistarray.h>
 #include <zmk/behavior.h>                 /* struct zmk_behavior_binding_event */
 #include "mejiro/mejiro_key_ids.h"
 
@@ -30,4 +30,5 @@ bool mejiro_try_emit(struct mejiro_state *st);
  * Optional helper if you want core to own the "released" entrypoint.
  * IMPORTANT: behavior handlers pass zmk_behavior_binding_event, NOT zmk_event_t.
  */
-int mejiro_on_binding_released(const struct zmk_behavior_binding_event *event);
+// naginata_release() 側の呼び出しに合わせて 2 引数に統一
+bool mejiro_try_emit_from_nginput(const NGListArray *nginput, int64_t timestamp);
