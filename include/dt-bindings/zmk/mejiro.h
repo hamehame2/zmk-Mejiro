@@ -1,66 +1,33 @@
-#pragma once
 /*
- * Devicetree / keymap-facing constants for Mejiro.
+ * SPDX-License-Identifier: MIT
  *
- * - This header is for DTS preprocessing (keymap .keymap).
- * - Do NOT include C headers here.
- * - Provide stable numeric IDs usable as: &mj L_n  (and also MJ_L_n).
+ * dt-bindings for Mejiro behavior parameter
+ * これが無いと keymap 内で &mj MJ_L0 の MJ_L0 が “数値”にならず dtc が落ちる
  */
 
-/* ---- Key IDs (must match the internal enum order) ----------------------
- * Source of truth: mejiro_key_ids.h enum (MJ_L_S..)
- * Keep these numbers stable once published.
- */
+#pragma once
 
-/* Left */
-#define MJ_L_S   0
-#define MJ_L_T   1
-#define MJ_L_K   2
-#define MJ_L_N   3
-#define MJ_L_n   4
-#define MJ_L_Y   5
-#define MJ_L_I   6
-#define MJ_L_A   7
-#define MJ_L_U   8
+/* 例: あなたの key_id が 0.. で並んでいる前提で最低限だけ用意 */
+#define MJ_L0 0
+#define MJ_L1 1
+#define MJ_L2 2
+#define MJ_L3 3
+#define MJ_L4 4
+#define MJ_L5 5
+#define MJ_L6 6
+#define MJ_L7 7
 
-/* Right */
-#define MJ_R_S   9
-#define MJ_R_T   10
-#define MJ_R_K   11
-#define MJ_R_N   12
-#define MJ_R_n   13
-#define MJ_R_Y   14
-#define MJ_R_I   15
-#define MJ_R_A   16
-#define MJ_R_U   17
+#define MJ_R0 8
+#define MJ_R1 9
+#define MJ_R2 10
+#define MJ_R3 11
+#define MJ_R4 12
+#define MJ_R5 13
+#define MJ_R6 14
+#define MJ_R7 15
 
-/* Modifiers / specials */
-#define MJ_H     18
-#define MJ_X     19
-
-/* ---- Short aliases (requested): allow "&mj L_n" etc ------------------- */
-/* Left aliases */
-#define L_S   MJ_L_S
-#define L_T   MJ_L_T
-#define L_K   MJ_L_K
-#define L_N   MJ_L_N
-#define L_n   MJ_L_n
-#define L_Y   MJ_L_Y
-#define L_I   MJ_L_I
-#define L_A   MJ_L_A
-#define L_U   MJ_L_U
-
-/* Right aliases */
-#define R_S   MJ_R_S
-#define R_T   MJ_R_T
-#define R_K   MJ_R_K
-#define R_N   MJ_R_N
-#define R_n   MJ_R_n
-#define R_Y   MJ_R_Y
-#define R_I   MJ_R_I
-#define R_A   MJ_R_A
-#define R_U   MJ_R_U
-
-/* Modifier aliases */
-#define H     MJ_H
-#define X     MJ_X
+/* mod 系があるならここに追加 */
+#define MJ_MOD0 16
+#define MJ_MOD1 17
+#define MJ_MOD2 18
+#define MJ_MOD3 19
