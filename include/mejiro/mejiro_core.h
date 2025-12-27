@@ -15,9 +15,9 @@ extern "C" {
 
 struct mejiro_state {
     /* behavior_mejiro.c が期待している名前 */
-    uint32_t left_mask;   /* bits for Left keys (0..8)  */
-    uint32_t right_mask;  /* bits for Right keys (0..8) */
-    uint32_t mod_mask;    /* bits for specials (H/X)    */
+    uint32_t left_mask;   /* bits for Left keys (0..15)  */
+    uint32_t right_mask;  /* bits for Right keys (0..15) */
+    uint32_t mod_mask;    /* bits for specials (H/X)     */
 
     /* optional (latched用などで使う) */
     uint32_t left_latched;
@@ -33,12 +33,15 @@ void mejiro_state_reset(struct mejiro_state *s);
 /* Update state by key-id press/release */
 void mejiro_state_set_key(struct mejiro_state *s, uint32_t key_id, bool pressed);
 
+/* behavior_mejiro.c から呼べる統一入口（ログで未宣言になってたやつ） */
+void mejiro_on_key_event(struct mejiro_state *s, uint32_t key_id, bool pressed);
+
 /*
  * Build stroke string from a latched state.
- * Rules (あなたが書いた仕様に合わせた最小実装):
- * - left only: "tk#" など（右が無ければ '-' を入れない）
+ * Rules (あなたの仕様に合わせた最小実装):
+ * - left only : "tk#" など（右が無ければ '-' を入れない）
  * - right only: "-t" / "-U" など（右だけは '-' で始める）
- * - both: "stk-..." のように '-' を挟む
+ * - both      : "stk-..." のように '-' を挟む
  * - H => '#', X => '*'
  */
 bool mejiro_build_stroke_string(const struct mejiro_state *latched, char *out, size_t out_len);
