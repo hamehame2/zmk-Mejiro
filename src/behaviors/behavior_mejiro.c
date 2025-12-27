@@ -18,7 +18,8 @@
 #include <zmk/behavior.h>
 #include <zmk/event_manager.h>
 #include <zmk/events/keycode_state_changed.h>
-
+#include "mejiro/mejiro_core.h"
+#include <zephyr/sys/util.h>   // ARG_UNUSED
 /*
  * Your repo convention:
  *   zmk-Mejiro/include/mejiro/mejiro_core.h
@@ -124,3 +125,23 @@ DEVICE_DT_INST_DEFINE(0, NULL, NULL, NULL, NULL,
                       POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
                       &behavior_mejiro_driver_api);
 
+
+/**
+ * Naginata 側で溜めた NGListArray を見て、
+ * Mejiro が処理するなら Mejiro 側で送信して true（naginata 出力を抑止）
+ * まだ処理しないなら false（従来どおり naginata に出力させる）
+ */
+bool mejiro_try_emit_from_nginput(const NGListArray *nginput, int64_t timestamp) {
+    ARG_UNUSED(timestamp);
+
+    if (!nginput) {
+        return false;
+    }
+
+    // ここは現段階では「リンクを通すための最低限」。
+    // ただし「意味が無い stub」にしないため、まずは “入力が来た事実” をログで確実に掴む。
+    LOG_DBG("MEJIRO hook: nginput size=%d", (int)nginput->size);
+
+    // TODO: 次の段階で nginput をシリアライズ→テーブル参照→送信 を実装する
+    return false;
+}
