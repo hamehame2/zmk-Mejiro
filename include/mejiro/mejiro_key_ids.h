@@ -1,14 +1,9 @@
 /*
  * SPDX-License-Identifier: MIT
  *
- * Mejiro key id definitions
- * - behavior binding param1 = enum mejiro_key_id
- *
- * NOTE:
- * まず「動作確認用」に 0..31 を Left(0..15)/Right(16..31) に割り当てています。
- * ここはあなたの実キー配列に合わせて後で増減/並び替えOK。
+ * Internal key-id definitions for Mejiro.
+ * These IDs MUST match include/dt-bindings/zmk/mejiro.h
  */
-
 #pragma once
 
 #ifdef __cplusplus
@@ -16,51 +11,31 @@ extern "C" {
 #endif
 
 enum mejiro_key_id {
-    /* Left 0..15 */
-    MJ_L0  = 0,
-    MJ_L1  = 1,
-    MJ_L2  = 2,
-    MJ_L3  = 3,
-    MJ_L4  = 4,
-    MJ_L5  = 5,
-    MJ_L6  = 6,
-    MJ_L7  = 7,
-    MJ_L8  = 8,
-    MJ_L9  = 9,
-    MJ_L10 = 10,
-    MJ_L11 = 11,
-    MJ_L12 = 12,
-    MJ_L13 = 13,
-    MJ_L14 = 14,
-    MJ_L15 = 15,
+    /* Left (0..8) */
+    MJ_L_S = 0,
+    MJ_L_T = 1,
+    MJ_L_K = 2,
+    MJ_L_N = 3,
+    MJ_L_n = 4,
+    MJ_L_Y = 5,
+    MJ_L_I = 6,
+    MJ_L_A = 7,
+    MJ_L_U = 8,
 
-    /* Right 16..31 */
-    MJ_R0  = 16,
-    MJ_R1  = 17,
-    MJ_R2  = 18,
-    MJ_R3  = 19,
-    MJ_R4  = 20,
-    MJ_R5  = 21,
-    MJ_R6  = 22,
-    MJ_R7  = 23,
-    MJ_R8  = 24,
-    MJ_R9  = 25,
-    MJ_R10 = 26,
-    MJ_R11 = 27,
-    MJ_R12 = 28,
-    MJ_R13 = 29,
-    MJ_R14 = 30,
-    MJ_R15 = 31,
+    /* Right (9..17) */
+    MJ_R_S = 9,
+    MJ_R_T = 10,
+    MJ_R_K = 11,
+    MJ_R_N = 12,
+    MJ_R_n = 13,
+    MJ_R_Y = 14,
+    MJ_R_I = 15,
+    MJ_R_A = 16,
+    MJ_R_U = 17,
 
-    /* Optional modifier keys (not used in the minimal bring-up) */
-    MJ_MOD0 = 32,
-    MJ_MOD1 = 33,
-    MJ_MOD2 = 34,
-    MJ_MOD3 = 35,
-    MJ_MOD4 = 36,
-    MJ_MOD5 = 37,
-    MJ_MOD6 = 38,
-    MJ_MOD7 = 39,
+    /* Modifiers / specials */
+    MJ_H = 18, /* # */
+    MJ_X = 19, /* * */
 };
 
 #ifdef __cplusplus
