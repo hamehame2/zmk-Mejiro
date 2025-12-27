@@ -1,26 +1,40 @@
 /*
  * SPDX-License-Identifier: MIT
  *
- * behavior_mejiro.c (clean)
+ * behavior_mejiro.c
  *
- * compatible: "zmk,behavior-mejiro"
- * #binding-cells = <1>
- * param1 = enum mejiro_key_id
+ * - compatible: "zmk,behavior-mejiro"
+ * - #binding-cells = <1>
+ * - binding->param1 = enum mejiro_key_id
+ *
+ * This file:
+ *  - Collects chord state while keys are pressed
+ *  - Emits stroke only when all keys are released
+ *  - Provides the hook symbol used by behavior_naginata.c:
+ *      bool mejiro_try_emit_from_nginput(const NGListArray *nginput, int64_t timestamp);
  */
 
 #define DT_DRV_COMPAT zmk_behavior_mejiro
 
 #include <zephyr/device.h>
 #include <zephyr/logging/log.h>
-#include <zephyr/sys/util.h>   // ARG_UNUSED
+#include <zephyr/sys/util.h> /* ARG_UNUSED */
 
 #include <drivers/behavior.h>
 
 #include <zmk/behavior.h>
+#include <zmk/event_manager.h>
+#include <zmk/events/keycode_state_changed.h>
 
-/* あなたのリポジトリに「実在する」ヘッダだけ使う */
+/* Your repo convention:
+ *   zmk-Mejiro/include/mejiro/mejiro_core.h
+ *   zmk-Mejiro/include/mejiro/mejiro_key_ids.h
+ */
 #include "mejiro/mejiro_core.h"
 #include "mejiro/mejiro_key_ids.h"
+
+/* For hook signature (NGListArray) */
+#include <zmk_naginata/nglistarray.h>
 
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
@@ -28,9 +42,13 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 /* Internal state                                                             */
 /* -------------------------------------------------------------------------- */
 
+struct behavior_mejiro_config {
+    /* reserved (keep for future options) */
+};
+
 static struct {
-    struct mejiro_state latched; /* 押された履歴（ORで溜める） */
-    struct mejiro_state down;    /* 現在押下中（押したらset/離したらclear） */
+    struct mejiro_state latched; /* snapshot to emit when all released */
+    struct mejiro_state down;    /* current down keys */
 } g;
 
 static inline void set_active_on_press(void) {
@@ -46,10 +64,10 @@ static void record_key(enum mejiro_key_id id, bool pressed) {
     if (pressed) {
         set_active_on_press();
 
-        /* latch: OR-in */
+        /* latched: OR-in (keeps all keys that were involved in this chord) */
         mejiro_on_key_event(&g.latched, id, true);
 
-        /* down: set */
+        /* down: set current pressed */
         mejiro_on_key_event(&g.down, id, true);
     } else {
         /* down: clear */
@@ -78,19 +96,24 @@ static int behavior_mejiro_binding_released(struct zmk_behavior_binding *binding
     enum mejiro_key_id id = (enum mejiro_key_id)binding->param1;
     record_key(id, false);
 
-    /* 何も押されていない＝ストローク確定 */
+    /* if nothing is down anymore -> emit using latched snapshot */
     if (!down_any() && g.latched.active) {
-        /* ここが「保管→動的決定→送信」の入口 */
-        LOG_DBG("MEJIRO stroke completed (L=%08x R=%08x M=%08x)",
-                (unsigned)g.latched.left_mask,
-                (unsigned)g.latched.right_mask,
-                (unsigned)g.latched.mod_mask);
-
-        /* TODO: 次の段階でここを
-         *   mejiro_try_emit(&g.latched);
-         * みたいな“確定出力API”に差し替える
+        /*
+         * IMPORTANT:
+         * ここで「latched」を確定ストロークとして出力する。
+         * core 側に確定出力APIがあるなら必ず呼ぶ。
+         *
+         * 例（mejiro_core 側に実装済みなら）:
+         *   bool ok = mejiro_try_emit(&g.latched);
+         *   (void)ok;
+         *
+         * 現段階ではまず確実に“確定が走った”ことが分かるログだけ出す。
          */
+        LOG_INF("MEJIRO stroke completed (L=%08x R=%08x M=%08x)",
+                (uint32_t)g.latched.left_mask, (uint32_t)g.latched.right_mask,
+                (uint32_t)g.latched.mod_mask);
 
+        /* reset both */
         mejiro_reset(&g.latched);
         mejiro_reset(&g.down);
     }
@@ -113,3 +136,28 @@ static const struct behavior_driver_api behavior_mejiro_driver_api = {
                             &behavior_mejiro_driver_api);
 
 DT_INST_FOREACH_STATUS_OKAY(BEHAVIOR_MEJIRO_INST)
+
+/* -------------------------------------------------------------------------- */
+/* Hook for Naginata                                                           */
+/* -------------------------------------------------------------------------- */
+/**
+ * Naginata 側で溜めた NGListArray を見て、
+ * Mejiro が処理するなら Mejiro 側で送信して true（naginata 出力を抑止）
+ * まだ処理しないなら false（従来どおり naginata に出力させる）
+ *
+ * NOTE:
+ * これが「実体」としてリンクされないと undefined reference になる。
+ */
+bool mejiro_try_emit_from_nginput(const NGListArray *nginput, int64_t timestamp) {
+    ARG_UNUSED(timestamp);
+
+    if (!nginput) {
+        return false;
+    }
+
+    /* まず“呼ばれている事実”を確実にログで掴む */
+    LOG_DBG("MEJIRO hook: nginput size=%d", (int)nginput->size);
+
+    /* TODO: 次の段階で nginput をシリアライズ→テーブル参照→送信 を実装する */
+    return false;
+}
