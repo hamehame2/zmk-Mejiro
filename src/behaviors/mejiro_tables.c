@@ -1,30 +1,49 @@
-#include <stdbool.h>
+/*
+ * SPDX-License-Identifier: MIT
+ *
+ * Minimal bring-up tables for Mejiro:
+ * - Converts masks to a simple ASCII string so we can confirm output.
+ *
+ * Later you will replace this with real Mejiro mapping.
+ */
+
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
 
-#include "mejiro/mejiro_tables.h"
+static const char left_chars[16]  = { 'a','s','d','f','g','h','j','k','l','q','w','e','r','t','y','u' };
+static const char right_chars[16] = { 'n','m',',','.','/','z','x','c','v','b','p','o','i','0','1','2' };
 
 /*
- * 今は “コンパイルが通る” スタブ。
- * 後でここを「stroke → かな/ローマ字」辞書に差し替える。
- *
- * Mejiro の Python 側ロジックは stroke を正規表現で分解して
- * kana/助詞/略語を合成してる（あなたが添付した mejiro_base.py / func.py）。
- * :contentReference[oaicite:1]{index=1} :contentReference[oaicite:2]{index=2}
+ * Build an output string from masks (deterministic order).
+ * out must be large enough. returns out length.
  */
-bool mejiro_tables_lookup(const char *stroke, char *out, size_t out_len) {
-    if (!stroke || !out || out_len == 0) {
-        return false;
+size_t mejiro_tables_build_output(uint32_t left_mask, uint32_t right_mask, uint32_t mod_mask,
+                                  char *out, size_t out_cap) {
+    (void)mod_mask;
+
+    if (!out || out_cap == 0) {
+        return 0;
     }
 
-    /* Example: a hardcoded test mapping */
-    if (strcmp(stroke, "STKNYIAUntk-STKNYIAUntk") == 0) {
-        /* "出力取止" 相当（Python側も特別扱いしてる） :contentReference[oaicite:3]{index=3} */
-        out[0] = '\0';
-        return true;
+    size_t w = 0;
+
+    /* left */
+    for (int i = 0; i < 16; i++) {
+        if (left_mask & (1u << i)) {
+            if (w + 1 >= out_cap) break;
+            out[w++] = left_chars[i];
+        }
     }
 
-    /* no match */
-    return false;
+    /* right */
+    for (int i = 0; i < 16; i++) {
+        if (right_mask & (1u << i)) {
+            if (w + 1 >= out_cap) break;
+            out[w++] = right_chars[i];
+        }
+    }
+
+    out[w] = '\0';
+    return w;
 }
