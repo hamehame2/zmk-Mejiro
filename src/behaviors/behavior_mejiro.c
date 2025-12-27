@@ -1,5 +1,11 @@
 /*
  * SPDX-License-Identifier: MIT
+ *
+ * behavior_mejiro.c (clean, single-file)
+ *
+ * - compatible: "zmk,behavior-mejiro"
+ * - #binding-cells = <1>
+ * - binding->param1 = enum mejiro_key_id
  */
 
 #define DT_DRV_COMPAT zmk_behavior_mejiro
@@ -14,36 +20,23 @@
 #include <zmk/events/keycode_state_changed.h>
 
 /*
- * ここはあなたの repo 構造に合わせている（mejiro/ 配下）
- * include/ に置いている前提：
- *   include/mejiro/mejiro_core.h
- *   include/mejiro/mejiro_key_ids.h
+ * Your repo convention:
+ *   zmk-Mejiro/include/mejiro/mejiro_core.h
+ *   zmk-Mejiro/include/mejiro/mejiro_key_ids.h
  */
 #include "mejiro/mejiro_core.h"
 #include "mejiro/mejiro_key_ids.h"
 
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
-/*
- * This behavior expects:
- *   binding->param1 = enum mejiro_key_id
- *
- * keymap examples:
- *   &mj MJ_L_S
- *   &mj MJ_R_k
- *   &mj MJ_POUND
- */
-struct behavior_mejiro_config {};
+/* -------------------------------------------------------------------------- */
+/* Internal state                                                             */
+/* -------------------------------------------------------------------------- */
 
-/*
- * We keep two states:
- * - latched: keys that participated in the stroke (accumulated while any key is down)
- * - down:    current pressed state
- *
- * On release:
- *   clear from down;
- *   if down becomes empty => emit using latched snapshot then reset both.
- */
+struct behavior_mejiro_config {
+    /* reserved (keep for future options) */
+};
+
 static struct {
     struct mejiro_state latched;
     struct mejiro_state down;
@@ -73,6 +66,10 @@ static void record_key(enum mejiro_key_id id, bool pressed) {
     }
 }
 
+/* -------------------------------------------------------------------------- */
+/* ZMK behavior callbacks                                                     */
+/* -------------------------------------------------------------------------- */
+
 static int behavior_mejiro_binding_pressed(struct zmk_behavior_binding *binding,
                                           struct zmk_behavior_binding_event event) {
     (void)event;
@@ -93,15 +90,17 @@ static int behavior_mejiro_binding_released(struct zmk_behavior_binding *binding
     /* if nothing is down anymore -> emit using latched snapshot */
     if (!down_any() && g.latched.active) {
         /*
-         * ここで「latched」の内容を確定ストロークとして出力する。
-         * 現状はあなたの core 側の設計（テーブル参照でemitする等）に寄せるため、
-         * core の "emit" 入口がある前提で呼ぶのが正解。
+         * IMPORTANT:
+         * ここで「latched」を確定ストロークとして出力する。
+         * core 側に確定出力APIを用意しているなら、必ずそれを呼ぶ。
          *
-         * もし core に emit 関数が既にあるなら、ここをそれに置換してOK。
-         * 例）mejiro_try_emit(&g.latched); など
+         * 例:
+         *   bool ok = mejiro_try_emit(&g.latched);
+         *   (void)ok;
+         *
+         * まだ無いなら、デバッグログだけ残して reset しておく。
          */
-
-        LOG_INF("MEJIRO stroke completed (latched: L=%08x R=%08x M=%08x)",
+        LOG_INF("MEJIRO stroke completed (L=%08x R=%08x M=%08x)",
                 g.latched.left_mask, g.latched.right_mask, g.latched.mod_mask);
 
         /* reset both */
@@ -117,9 +116,10 @@ static const struct behavior_driver_api behavior_mejiro_driver_api = {
     .binding_released = behavior_mejiro_binding_released,
 };
 
-#define DT_DRV_COMPAT zmk_behavior_mejiro
-#define MEJIRO_NODE DT_NODELABEL(mj)
+/* -------------------------------------------------------------------------- */
+/* Device instance                                                            */
+/* -------------------------------------------------------------------------- */
 
-DEVICE_DT_DEFINE(MEJIRO_NODE, NULL, NULL, NULL, NULL,
-                 APPLICATION, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
-                 &behavior_mejiro_driver_api);
+DEVICE_DT_INST_DEFINE(0, NULL, NULL, NULL, NULL,
+                      APPLICATION, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
+                      &behavior_mejiro_driver_api);
