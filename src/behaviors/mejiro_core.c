@@ -6,7 +6,7 @@
 #include <zephyr/logging/log.h>
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
-#include "mejiro/core.h"
+#include "mejiro/mejiro_core.h"
 #include "mejiro/mejiro_tables.h"
 
 /* forward */
