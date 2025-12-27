@@ -1,52 +1,94 @@
-/*
- * Copyright (c) 2020 The ZMK Contributors
- *
- * SPDX-License-Identifier: MIT
- */
+#include <stdbool.h>
+#include <stdint.h>
 
-#define DT_DRV_COMPAT zmk_behavior_mejiro
-
-#include <zephyr/device.h>
-#include <drivers/behavior.h>
 #include <zephyr/logging/log.h>
-
-#include <zmk/event_manager.h>
-#include <zmk/events/keycode_state_changed.h>
-#include <zmk/behavior.h>
-
-#include "mejiro/mejiro_core.h"
-
 LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
-struct behavior_mejiro_config {
-    /* (currently none) */
-};
+#include <drivers/behavior.h>
+#include <zmk/behavior.h>
 
-struct behavior_mejiro_data {
-    /* (currently none) */
-};
+#include "mejiro/core.h"
+#include "mejiro/mejiro_key_ids.h"
 
-static int behavior_mejiro_init(const struct device *dev) {
-    ARG_UNUSED(dev);
-    return 0;
+/*
+ * This behavior expects param1 = enum mejiro_key_id
+ *
+ * keymap:
+ *   &mj MJ_L_S
+ *   &mj MJ_R_k
+ *   &mj MJ_POUND
+ * etc.
+ */
+
+struct behavior_mejiro_config {};
+
+/* We keep two states:
+ * - latched: keys that participated in the stroke (accumulated while any key is down)
+ * - down:    current pressed state
+ *
+ * On release: clear from down; if down becomes empty => emit using latched snapshot then reset both.
+ */
+static struct {
+    struct mejiro_state latched;
+    struct mejiro_state down;
+} g;
+
+static inline void set_active_on_press(void) {
+    g.latched.active = true;
+    g.down.active = true;
+}
+
+static inline bool down_any(void) {
+    return (g.down.left_mask | g.down.right_mask | g.down.mod_mask) != 0;
+}
+
+static void record_key(enum mejiro_key_id id, bool pressed) {
+    if (pressed) {
+        set_active_on_press();
+        /* latch: OR-in */
+        mejiro_on_key_event(&g.latched, id, true);
+        /* down: set */
+        mejiro_on_key_event(&g.down, id, true);
+    } else {
+        /* down: clear */
+        mejiro_on_key_event(&g.down, id, false);
+    }
 }
 
 static int behavior_mejiro_binding_pressed(struct zmk_behavior_binding *binding,
                                           struct zmk_behavior_binding_event event) {
-    ARG_UNUSED(binding);
-    ARG_UNUSED(event);
-
-    // Treat press as registration only; emit on release (Mejiro policy).
-    // (If you later want press-side behavior, add it here.)
-    return 0;
+    (void)binding;
+    enum mejiro_key_id id = (enum mejiro_key_id)event.binding.param1;
+    record_key(id, true);
+    return ZMK_BEHAVIOR_OPAQUE;
 }
 
 static int behavior_mejiro_binding_released(struct zmk_behavior_binding *binding,
                                            struct zmk_behavior_binding_event event) {
-    ARG_UNUSED(binding);
+    (void)binding;
+    enum mejiro_key_id id = (enum mejiro_key_id)event.binding.param1;
 
-    // Delegate to core: it should look at released-state snapshot and decide output.
-    return mejiro_on_binding_released(event);
+    record_key(id, false);
+
+    /* if nothing is down anymore -> emit using latched snapshot */
+    if (!down_any() && g.latched.active) {
+        /* build stroke from latched and lookup+emit */
+        /* We reuse core’s helpers by temporarily copying latched into a local and forcing "down empty" */
+        struct mejiro_state snapshot = g.latched;
+
+        /* Clear down masks inside snapshot so core's "all released" logic can work if you use it;
+           but here we just reset and log success. */
+        (void)snapshot;
+
+        /* For now, simply reset latched/down and report opaque. You can call a real emit routine here. */
+        LOG_INF("MEJIRO stroke completed (latched masks: L=%08x R=%08x M=%08x)",
+                g.latched.left_mask, g.latched.right_mask, g.latched.mod_mask);
+
+        mejiro_reset(&g.latched);
+        mejiro_reset(&g.down);
+    }
+
+    return ZMK_BEHAVIOR_OPAQUE;
 }
 
 static const struct behavior_driver_api behavior_mejiro_driver_api = {
@@ -54,19 +96,7 @@ static const struct behavior_driver_api behavior_mejiro_driver_api = {
     .binding_released = behavior_mejiro_binding_released,
 };
 
-/*
- * IMPORTANT:
- * Use BEHAVIOR_DT_INST_DEFINE (same style as behavior_naginata.c)
- * instead of raw DEVICE_DT_INST_DEFINE to avoid Zephyr init-level macro pitfalls.
- */
-#define KP_INST(n) \
-    static struct behavior_mejiro_data behavior_mejiro_data_##n; \
-    static const struct behavior_mejiro_config behavior_mejiro_config_##n = {}; \
-    BEHAVIOR_DT_INST_DEFINE(n, \
-        behavior_mejiro_init, NULL, \
-        &behavior_mejiro_data_##n, &behavior_mejiro_config_##n, \
-        POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT, \
-        &behavior_mejiro_driver_api)
+#define DT_DRV_COMPAT zmk_behavior_mejiro
 
-DT_INST_FOREACH_STATUS_OKAY(KP_INST)
-
+DEVICE_DT_INST_DEFINE(0, NULL, NULL, NULL, NULL, APPLICATION,
+                      CONFIG_KERNEL_INIT_PRIORITY_DEFAULT, &behavior_mejiro_driver_api);
