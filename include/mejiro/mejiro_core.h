@@ -1,58 +1,50 @@
-#pragma once
 /*
  * SPDX-License-Identifier: MIT
  *
- * Mejiro core state + helpers
- *
- * IMPORTANT:
- * - This file MUST define `struct mejiro_state`.
- * - Do NOT replace this header with key-id enums etc.
+ * Mejiro core state + helpers.
  */
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#pragma once
 
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
-/*
- * State model (your current approach):
- * - pressed_left/right : current down keys (bitmask)
- * - latched_left/right : accumulated keys participating in the stroke while any key is down
- * - active             : whether we are currently tracking a stroke
- */
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct mejiro_state {
+    /* behavior_mejiro.c が期待している名前 */
+    uint32_t left_mask;   /* bits for Left keys (0..8)  */
+    uint32_t right_mask;  /* bits for Right keys (0..8) */
+    uint32_t mod_mask;    /* bits for specials (H/X)    */
+
+    /* optional (latched用などで使う) */
+    uint32_t left_latched;
+    uint32_t right_latched;
+    uint32_t mod_latched;
+
     bool active;
-
-    uint32_t pressed_left;
-    uint32_t pressed_right;
-
-    uint32_t latched_left;
-    uint32_t latched_right;
 };
 
-/* basic state ops */
-void mejiro_reset(struct mejiro_state *s);
-void mejiro_set_active(struct mejiro_state *s, bool on);
+/* Reset a state (all masks -> 0) */
+void mejiro_state_reset(struct mejiro_state *s);
+
+/* Update state by key-id press/release */
+void mejiro_state_set_key(struct mejiro_state *s, uint32_t key_id, bool pressed);
 
 /*
- * Key events:
- * - key_id is your logical key id (enum mejiro_key_id etc.)
- * - is_left selects whether the key belongs to left or right side bitfield
- *
- * return: true if accepted/handled
+ * Build stroke string from a latched state.
+ * Rules (あなたが書いた仕様に合わせた最小実装):
+ * - left only: "tk#" など（右が無ければ '-' を入れない）
+ * - right only: "-t" / "-U" など（右だけは '-' で始める）
+ * - both: "stk-..." のように '-' を挟む
+ * - H => '#', X => '*'
  */
-bool mejiro_on_key_press(struct mejiro_state *s, uint16_t key_id, bool is_left, int64_t timestamp);
-bool mejiro_on_key_release(struct mejiro_state *s, uint16_t key_id, bool is_left, int64_t timestamp);
+bool mejiro_build_stroke_string(const struct mejiro_state *latched, char *out, size_t out_len);
 
-/*
- * Try emit:
- * - should be called when you detect "all released" timing.
- * - builds stroke string and dictionary lookup + output (mejiro_tables + mejiro_send_roman).
- */
-bool mejiro_try_emit(struct mejiro_state *s, int64_t timestamp);
+/* Try emit (tables lookup + roman sender). Return true if emitted. */
+bool mejiro_try_emit(const struct mejiro_state *latched, int64_t timestamp);
 
 #ifdef __cplusplus
 }
