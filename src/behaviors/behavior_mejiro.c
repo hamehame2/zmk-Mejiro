@@ -1,32 +1,48 @@
-#include <stdbool.h>
-#include <stdint.h>
+/*
+ * SPDX-License-Identifier: MIT
+ */
 
+#define DT_DRV_COMPAT zmk_behavior_mejiro
+
+#include <zephyr/device.h>
 #include <zephyr/logging/log.h>
-LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
 #include <drivers/behavior.h>
-#include <zmk/behavior.h>
 
+#include <zmk/behavior.h>
+#include <zmk/event_manager.h>
+#include <zmk/events/keycode_state_changed.h>
+
+/*
+ * ここはあなたの repo 構造に合わせている（mejiro/ 配下）
+ * include/ に置いている前提：
+ *   include/mejiro/mejiro_core.h
+ *   include/mejiro/mejiro_key_ids.h
+ */
 #include "mejiro/mejiro_core.h"
 #include "mejiro/mejiro_key_ids.h"
 
+LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
+
 /*
- * This behavior expects param1 = enum mejiro_key_id
+ * This behavior expects:
+ *   binding->param1 = enum mejiro_key_id
  *
- * keymap:
+ * keymap examples:
  *   &mj MJ_L_S
  *   &mj MJ_R_k
  *   &mj MJ_POUND
- * etc.
  */
-
 struct behavior_mejiro_config {};
 
-/* We keep two states:
+/*
+ * We keep two states:
  * - latched: keys that participated in the stroke (accumulated while any key is down)
  * - down:    current pressed state
  *
- * On release: clear from down; if down becomes empty => emit using latched snapshot then reset both.
+ * On release:
+ *   clear from down;
+ *   if down becomes empty => emit using latched snapshot then reset both.
  */
 static struct {
     struct mejiro_state latched;
@@ -45,8 +61,10 @@ static inline bool down_any(void) {
 static void record_key(enum mejiro_key_id id, bool pressed) {
     if (pressed) {
         set_active_on_press();
+
         /* latch: OR-in */
         mejiro_on_key_event(&g.latched, id, true);
+
         /* down: set */
         mejiro_on_key_event(&g.down, id, true);
     } else {
@@ -57,33 +75,36 @@ static void record_key(enum mejiro_key_id id, bool pressed) {
 
 static int behavior_mejiro_binding_pressed(struct zmk_behavior_binding *binding,
                                           struct zmk_behavior_binding_event event) {
-    (void)binding;
+    (void)event;
+
     enum mejiro_key_id id = (enum mejiro_key_id)binding->param1;
     record_key(id, true);
+
     return ZMK_BEHAVIOR_OPAQUE;
 }
 
 static int behavior_mejiro_binding_released(struct zmk_behavior_binding *binding,
                                            struct zmk_behavior_binding_event event) {
-    (void)binding;
-    enum mejiro_key_id id = (enum mejiro_key_id)binding->param1;
+    (void)event;
 
+    enum mejiro_key_id id = (enum mejiro_key_id)binding->param1;
     record_key(id, false);
 
     /* if nothing is down anymore -> emit using latched snapshot */
     if (!down_any() && g.latched.active) {
-        /* build stroke from latched and lookup+emit */
-        /* We reuse core’s helpers by temporarily copying latched into a local and forcing "down empty" */
-        struct mejiro_state snapshot = g.latched;
+        /*
+         * ここで「latched」の内容を確定ストロークとして出力する。
+         * 現状はあなたの core 側の設計（テーブル参照でemitする等）に寄せるため、
+         * core の "emit" 入口がある前提で呼ぶのが正解。
+         *
+         * もし core に emit 関数が既にあるなら、ここをそれに置換してOK。
+         * 例）mejiro_try_emit(&g.latched); など
+         */
 
-        /* Clear down masks inside snapshot so core's "all released" logic can work if you use it;
-           but here we just reset and log success. */
-        (void)snapshot;
-
-        /* For now, simply reset latched/down and report opaque. You can call a real emit routine here. */
-        LOG_INF("MEJIRO stroke completed (latched masks: L=%08x R=%08x M=%08x)",
+        LOG_INF("MEJIRO stroke completed (latched: L=%08x R=%08x M=%08x)",
                 g.latched.left_mask, g.latched.right_mask, g.latched.mod_mask);
 
+        /* reset both */
         mejiro_reset(&g.latched);
         mejiro_reset(&g.down);
     }
@@ -96,9 +117,6 @@ static const struct behavior_driver_api behavior_mejiro_driver_api = {
     .binding_released = behavior_mejiro_binding_released,
 };
 
-#define DT_DRV_COMPAT zmk_behavior_mejiro
-
-DEVICE_DT_INST_DEFINE(0, NULL, NULL, NULL, NULL, APPLICATION,
-                      CONFIG_KERNEL_INIT_PRIORITY_DEFAULT, &behavior_mejiro_driver_api);
-
-
+DEVICE_DT_INST_DEFINE(0, NULL, NULL, NULL, NULL,
+                      APPLICATION, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
+                      &behavior_mejiro_driver_api);
