@@ -1,20 +1,26 @@
-#include <mejiro/mejiro_send_roman.h>
+#include <stddef.h>
+#include <string.h>
 
 #include <zephyr/logging/log.h>
-
-LOG_MODULE_REGISTER(mejiro_send_roman, CONFIG_ZMK_LOG_LEVEL);
+LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 
 /*
- * Minimal stub:
- * You will likely replace this with proper keycode emission.
- * For now, return false if roman is NULL/empty.
+ * ここは “送出方式” の差し替え点。
+ * - SEND_STRING 的な物を使う
+ * - keycode を順にタップする
+ * - macro subsystem を叩く
+ * など、あなたの既存方針に合わせる。
+ *
+ * 今はログだけ出して成功扱いにしない（=副作用無し）。
  */
-bool mejiro_send_roman(const char *roman) {
-    if (!roman || !roman[0]) {
+bool mejiro_send_text(const char *text) {
+    if (!text) {
         return false;
     }
-
-    /* TODO: implement actual key output (SEND_STRING equivalent for ZMK) */
-    LOG_DBG("mejiro_send_roman: '%s' (stub)", roman);
-    return true;
+    if (text[0] == '\0') {
+        /* empty output is valid (e.g. suppression) */
+        return true;
+    }
+    LOG_INF("MEJIRO emit: %s", text);
+    return false; /* sending not implemented yet */
 }
