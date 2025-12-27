@@ -1,67 +1,58 @@
+#pragma once
 /*
  * SPDX-License-Identifier: MIT
  *
- * Mejiro key id definitions
- * - behavior binding param1 = enum mejiro_key_id
+ * Mejiro core state + helpers
  *
- * NOTE:
- * まず「動作確認用」に 0..31 を Left(0..15)/Right(16..31) に割り当てています。
- * ここはあなたの実キー配列に合わせて後で増減/並び替えOK。
+ * IMPORTANT:
+ * - This file MUST define `struct mejiro_state`.
+ * - Do NOT replace this header with key-id enums etc.
  */
-
-#pragma once
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-enum mejiro_key_id {
-    /* Left 0..15 */
-    MJ_L0  = 0,
-    MJ_L1  = 1,
-    MJ_L2  = 2,
-    MJ_L3  = 3,
-    MJ_L4  = 4,
-    MJ_L5  = 5,
-    MJ_L6  = 6,
-    MJ_L7  = 7,
-    MJ_L8  = 8,
-    MJ_L9  = 9,
-    MJ_L10 = 10,
-    MJ_L11 = 11,
-    MJ_L12 = 12,
-    MJ_L13 = 13,
-    MJ_L14 = 14,
-    MJ_L15 = 15,
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 
-    /* Right 16..31 */
-    MJ_R0  = 16,
-    MJ_R1  = 17,
-    MJ_R2  = 18,
-    MJ_R3  = 19,
-    MJ_R4  = 20,
-    MJ_R5  = 21,
-    MJ_R6  = 22,
-    MJ_R7  = 23,
-    MJ_R8  = 24,
-    MJ_R9  = 25,
-    MJ_R10 = 26,
-    MJ_R11 = 27,
-    MJ_R12 = 28,
-    MJ_R13 = 29,
-    MJ_R14 = 30,
-    MJ_R15 = 31,
+/*
+ * State model (your current approach):
+ * - pressed_left/right : current down keys (bitmask)
+ * - latched_left/right : accumulated keys participating in the stroke while any key is down
+ * - active             : whether we are currently tracking a stroke
+ */
+struct mejiro_state {
+    bool active;
 
-    /* Optional modifier keys (not used in the minimal bring-up) */
-    MJ_MOD0 = 32,
-    MJ_MOD1 = 33,
-    MJ_MOD2 = 34,
-    MJ_MOD3 = 35,
-    MJ_MOD4 = 36,
-    MJ_MOD5 = 37,
-    MJ_MOD6 = 38,
-    MJ_MOD7 = 39,
+    uint32_t pressed_left;
+    uint32_t pressed_right;
+
+    uint32_t latched_left;
+    uint32_t latched_right;
 };
+
+/* basic state ops */
+void mejiro_reset(struct mejiro_state *s);
+void mejiro_set_active(struct mejiro_state *s, bool on);
+
+/*
+ * Key events:
+ * - key_id is your logical key id (enum mejiro_key_id etc.)
+ * - is_left selects whether the key belongs to left or right side bitfield
+ *
+ * return: true if accepted/handled
+ */
+bool mejiro_on_key_press(struct mejiro_state *s, uint16_t key_id, bool is_left, int64_t timestamp);
+bool mejiro_on_key_release(struct mejiro_state *s, uint16_t key_id, bool is_left, int64_t timestamp);
+
+/*
+ * Try emit:
+ * - should be called when you detect "all released" timing.
+ * - builds stroke string and dictionary lookup + output (mejiro_tables + mejiro_send_roman).
+ */
+bool mejiro_try_emit(struct mejiro_state *s, int64_t timestamp);
 
 #ifdef __cplusplus
 }
