@@ -1,200 +1,158 @@
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdint.h>
-#include <string.h>
-
+/*
+ * SPDX-License-Identifier: MIT
+ */
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 
 #include "mejiro/mejiro_core.h"
+#include "mejiro/mejiro_key_ids.h"
 #include "mejiro/mejiro_tables.h"
+
+/* 送信は roman 実装へ */
 #include "mejiro/mejiro_send_roman.h"
 
 LOG_MODULE_REGISTER(mejiro_core, CONFIG_ZMK_LOG_LEVEL);
 
-/*
- * 重要:
- * - pressed_* は現在押されているキー(bit)
- * - latched_* は「ストローク中に関与したキー(bit)」を蓄積
- * - 最後のキーが離された瞬間(pressed_left/right == 0)に stroke を確定して辞書 lookup
- *
- * stroke 表現はあなたの方針に合わせる:
- * - 左だけ: "tk#" / "#" / "n" (右が無ければ '-' を入れない)
- * - 右だけ: "-U" / "-n" (右だけは '-' で始める)
- * - 両手: "STK-TR..." のように '-' を挟む
- * - H は '#'、X は '*'（左右キーとして分けない）
- */
+/* ---- helpers ---------------------------------------------------------- */
 
-/* ---- key_id -> bit mapping ------------------------------------------------
- * ここはあなたの実装に合わせて調整する場所。
- * いまは「key_id を 0..31 にして、そのまま 1u<<id を左右へ分配」という最小方針にしている。
- */
-static inline uint32_t bit_of_key(uint16_t key_id) {
-    if (key_id >= 32) {
-        return 0;
+static inline void append_char(char *out, size_t out_len, size_t *pos, char c) {
+    if (*pos + 1 >= out_len) {
+        return;
     }
-    return (1u << key_id);
+    out[*pos] = c;
+    (*pos)++;
+    out[*pos] = '\0';
 }
 
-/* ---- stroke string builder -----------------------------------------------
- * NOTE: ここは「テーブル lookup 用のキー文字列」なので、あなたの原典ルールに合わせて作る。
- * まずは最小で:
- * - left bits -> "stknya..." 等へ展開（順序固定）
- * - right bits -> "tr..." 等へ展開（順序固定）
- *
- * 実際の bit->文字 は、あなたの mejiro_key_ids / テーブルに合わせて埋める。
- */
-static bool build_stroke_string(const struct mejiro_state *s, char *out, size_t out_len) {
-    if (!s || !out || out_len == 0) {
-        return false;
+/* key order: s t k N n y i a U */
+static const struct {
+    uint32_t bit;
+    char ch;
+} mj_order[] = {
+    { 1u << 0, 's' }, /* S */
+    { 1u << 1, 't' }, /* T */
+    { 1u << 2, 'k' }, /* K */
+    { 1u << 3, 'N' }, /* N */
+    { 1u << 4, 'n' }, /* n */
+    { 1u << 5, 'y' }, /* Y */
+    { 1u << 6, 'i' }, /* I */
+    { 1u << 7, 'a' }, /* A */
+    { 1u << 8, 'U' }, /* U */
+};
+
+void mejiro_state_reset(struct mejiro_state *s) {
+    if (!s) return;
+    s->left_mask = 0;
+    s->right_mask = 0;
+    s->mod_mask = 0;
+    s->left_latched = 0;
+    s->right_latched = 0;
+    s->mod_latched = 0;
+    s->active = false;
+}
+
+static inline bool is_left_id(uint32_t id) { return id <= MJ_L_U; }
+static inline bool is_right_id(uint32_t id) { return (id >= MJ_R_S) && (id <= MJ_R_U); }
+
+void mejiro_state_set_key(struct mejiro_state *s, uint32_t key_id, bool pressed) {
+    if (!s) return;
+
+    if (is_left_id(key_id)) {
+        uint32_t bit = 1u << key_id; /* 0..8 */
+        if (pressed) s->left_mask |= bit;
+        else s->left_mask &= ~bit;
+        return;
     }
 
+    if (is_right_id(key_id)) {
+        uint32_t bit = 1u << (key_id - MJ_R_S); /* 0..8 */
+        if (pressed) s->right_mask |= bit;
+        else s->right_mask &= ~bit;
+        return;
+    }
+
+    if (key_id == MJ_H) {
+        uint32_t bit = 1u << 0;
+        if (pressed) s->mod_mask |= bit;
+        else s->mod_mask &= ~bit;
+        return;
+    }
+
+    if (key_id == MJ_X) {
+        uint32_t bit = 1u << 1;
+        if (pressed) s->mod_mask |= bit;
+        else s->mod_mask &= ~bit;
+        return;
+    }
+}
+
+bool mejiro_build_stroke_string(const struct mejiro_state *latched, char *out, size_t out_len) {
+    if (!latched || !out || out_len == 0) return false;
     out[0] = '\0';
 
-    const uint32_t L = s->latched_left;
-    const uint32_t R = s->latched_right;
+    const uint32_t L = latched->left_mask;
+    const uint32_t R = latched->right_mask;
+    const uint32_t M = latched->mod_mask;
 
-    /* TODO: ここをあなたの “左 S T K N Y I A U n t k (#/*)” へ確定させる */
-    /* いまはデバッグ用に「L=xxxxxxxx R=xxxxxxxx」を返して lookup しない */
-    /* ただしあなたが求めている確認ログ( stroke='...' )が出るようにするため、必ず何かを入れる */
-    if (L == 0 && R == 0) {
-        snprintf(out, out_len, "");
-        return true;
+    /* 左文字列 */
+    char left[32];
+    char right[32];
+    size_t lp = 0, rp = 0;
+    left[0] = '\0';
+    right[0] = '\0';
+
+    for (size_t i = 0; i < (sizeof(mj_order) / sizeof(mj_order[0])); i++) {
+        if (L & mj_order[i].bit) append_char(left, sizeof(left), &lp, mj_order[i].ch);
     }
 
-    /* 仮: 左だけ/右だけ/両手の '-' ルールだけ先に反映した “枠” を作る */
-    if (L != 0 && R == 0) {
-        /* left only: no leading '-' */
-        snprintf(out, out_len, "L%08x", (unsigned int)L);
-        return true;
-    } else if (L == 0 && R != 0) {
-        /* right only: leading '-' */
-        snprintf(out, out_len, "-R%08x", (unsigned int)R);
-        return true;
-    } else {
-        /* both: '-' between */
-        snprintf(out, out_len, "L%08x-R%08x", (unsigned int)L, (unsigned int)R);
-        return true;
-    }
-}
+    /* H/X は「左右で分けない」ので左側に付ける（仕様の最小解釈） */
+    if (M & (1u << 0)) append_char(left, sizeof(left), &lp, '#');
+    if (M & (1u << 1)) append_char(left, sizeof(left), &lp, '*');
 
-/* ---- public API ---------------------------------------------------------- */
-
-void mejiro_reset(struct mejiro_state *s) {
-    if (!s) {
-        return;
-    }
-    s->active = false;
-    s->pressed_left = 0;
-    s->pressed_right = 0;
-    s->latched_left = 0;
-    s->latched_right = 0;
-}
-
-void mejiro_set_active(struct mejiro_state *s, bool on) {
-    if (!s) {
-        return;
-    }
-    s->active = on;
-    if (!on) {
-        s->pressed_left = 0;
-        s->pressed_right = 0;
-        s->latched_left = 0;
-        s->latched_right = 0;
-    }
-}
-
-bool mejiro_on_key_press(struct mejiro_state *s, uint16_t key_id, bool is_left, int64_t timestamp) {
-    (void)timestamp;
-    if (!s) {
-        return false;
+    for (size_t i = 0; i < (sizeof(mj_order) / sizeof(mj_order[0])); i++) {
+        if (R & mj_order[i].bit) append_char(right, sizeof(right), &rp, mj_order[i].ch);
     }
 
-    uint32_t bit = bit_of_key(key_id);
-    if (bit == 0) {
-        return false;
+    /* 出力規則 */
+    if (lp == 0 && rp == 0) {
+        return false; /* 空 */
     }
 
-    s->active = true;
+    size_t op = 0;
+    out[0] = '\0';
 
-    if (is_left) {
-        s->pressed_left |= bit;
-        s->latched_left |= bit;
-    } else {
-        s->pressed_right |= bit;
-        s->latched_right |= bit;
+    if (lp > 0) {
+        for (size_t i = 0; i < lp; i++) append_char(out, out_len, &op, left[i]);
+    }
+
+    if (rp > 0) {
+        /* 右だけなら先頭 '-' */
+        if (lp == 0) append_char(out, out_len, &op, '-');
+        else append_char(out, out_len, &op, '-');
+
+        for (size_t i = 0; i < rp; i++) append_char(out, out_len, &op, right[i]);
     }
 
     return true;
 }
 
-bool mejiro_on_key_release(struct mejiro_state *s, uint16_t key_id, bool is_left, int64_t timestamp) {
-    (void)timestamp;
-    if (!s) {
+bool mejiro_try_emit(const struct mejiro_state *latched, int64_t timestamp) {
+    char stroke[64];
+    char out[96];
+
+    if (!mejiro_build_stroke_string(latched, stroke, sizeof(stroke))) {
         return false;
     }
 
-    uint32_t bit = bit_of_key(key_id);
-    if (bit == 0) {
-        return false;
-    }
+    /* ここがあなたの確認ポイント: stroke が期待通り出るか */
+    LOG_DBG("MEJIRO stroke='%s' (L=0x%08x R=0x%08x M=0x%08x)",
+            stroke, latched->left_mask, latched->right_mask, latched->mod_mask);
 
-    if (is_left) {
-        s->pressed_left &= ~bit;
-    } else {
-        s->pressed_right &= ~bit;
-    }
-
-    return true;
-}
-
-bool mejiro_try_emit(struct mejiro_state *s, int64_t timestamp) {
-    if (!s || !s->active) {
-        return false;
-    }
-
-    /* まだ何か押されているなら確定しない */
-    if (s->pressed_left != 0 || s->pressed_right != 0) {
-        return false;
-    }
-
-    char stroke[128];
-    if (!build_stroke_string(s, stroke, sizeof(stroke))) {
-        /* 確定できないならリセットだけ */
-        s->latched_left = 0;
-        s->latched_right = 0;
-        s->active = false;
-        return false;
-    }
-
-    LOG_DBG("mejiro: commit stroke='%s' (L=0x%08x R=0x%08x)",
-            stroke, (unsigned int)s->latched_left, (unsigned int)s->latched_right);
-
-    /* 空は何もしない（ただリセット） */
-    if (stroke[0] == '\0') {
-        s->latched_left = 0;
-        s->latched_right = 0;
-        s->active = false;
-        return true;
-    }
-
-    char out[128];
     if (!mejiro_tables_lookup(stroke, out, sizeof(out))) {
-        LOG_DBG("mejiro: no command for stroke='%s'", stroke);
-        s->latched_left = 0;
-        s->latched_right = 0;
-        s->active = false;
-        return true;
+        LOG_DBG("MEJIRO tables: no match for '%s'", stroke);
+        return false;
     }
 
-    LOG_DBG("mejiro: emit stroke='%s' -> '%s'", stroke, out);
-
-    bool ok = mejiro_send_text(out, timestamp);
-
-    /* 確定したので必ずリセット */
-    s->latched_left = 0;
-    s->latched_right = 0;
-    s->active = false;
-
-    return ok;
+    LOG_DBG("MEJIRO emit: '%s' <= '%s'", out, stroke);
+    return mejiro_send_text(out, timestamp);
 }
