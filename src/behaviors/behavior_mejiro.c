@@ -58,7 +58,7 @@ static void record_key(enum mejiro_key_id id, bool pressed) {
 static int behavior_mejiro_binding_pressed(struct zmk_behavior_binding *binding,
                                           struct zmk_behavior_binding_event event) {
     (void)binding;
-    enum mejiro_key_id id = (enum mejiro_key_id)event.binding.param1;
+    enum mejiro_key_id id = (enum mejiro_key_id)binding->param1;
     record_key(id, true);
     return ZMK_BEHAVIOR_OPAQUE;
 }
@@ -66,7 +66,7 @@ static int behavior_mejiro_binding_pressed(struct zmk_behavior_binding *binding,
 static int behavior_mejiro_binding_released(struct zmk_behavior_binding *binding,
                                            struct zmk_behavior_binding_event event) {
     (void)binding;
-    enum mejiro_key_id id = (enum mejiro_key_id)event.binding.param1;
+    enum mejiro_key_id id = (enum mejiro_key_id)binding->param1;
 
     record_key(id, false);
 
@@ -100,4 +100,5 @@ static const struct behavior_driver_api behavior_mejiro_driver_api = {
 
 DEVICE_DT_INST_DEFINE(0, NULL, NULL, NULL, NULL, APPLICATION,
                       CONFIG_KERNEL_INIT_PRIORITY_DEFAULT, &behavior_mejiro_driver_api);
+
 
