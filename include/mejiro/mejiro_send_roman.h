@@ -1,18 +1,18 @@
-#pragma once
 /*
  * SPDX-License-Identifier: MIT
  *
- * Roman output (ASCII -> HID key taps)
+ * Send roman (ASCII) string through ZMK HID.
  */
+#pragma once
+
+#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#include <stdbool.h>
-#include <stdint.h>
-
-bool mejiro_send_text(const char *s, int64_t timestamp);
+/* Returns true if sent. */
+bool mejiro_send_roman(const char *text);
 
 #ifdef __cplusplus
 }
