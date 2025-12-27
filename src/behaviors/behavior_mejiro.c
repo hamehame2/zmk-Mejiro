@@ -7,7 +7,7 @@ LOG_MODULE_DECLARE(zmk, CONFIG_ZMK_LOG_LEVEL);
 #include <drivers/behavior.h>
 #include <zmk/behavior.h>
 
-#include "mejiro/core.h"
+#include "mejiro/mejiro_core.h"
 #include "mejiro/mejiro_key_ids.h"
 
 /*
@@ -100,3 +100,4 @@ static const struct behavior_driver_api behavior_mejiro_driver_api = {
 
 DEVICE_DT_INST_DEFINE(0, NULL, NULL, NULL, NULL, APPLICATION,
                       CONFIG_KERNEL_INIT_PRIORITY_DEFAULT, &behavior_mejiro_driver_api);
+
