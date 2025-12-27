@@ -121,5 +121,6 @@ static const struct behavior_driver_api behavior_mejiro_driver_api = {
 /* -------------------------------------------------------------------------- */
 
 DEVICE_DT_INST_DEFINE(0, NULL, NULL, NULL, NULL,
-                      APPLICATION, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
+                      POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
                       &behavior_mejiro_driver_api);
+
